@@ -31,8 +31,7 @@ class DashboardWindow(QMainWindow):
 
         # Widget central
         central = QWidget()
-        layout = QVBoxLayout()
-        central.setLayout(layout)
+        layout = QVBoxLayout(central)
         self.setCentralWidget(central)
 
         # Bandeau de bienvenue
@@ -114,20 +113,21 @@ class DashboardWindow(QMainWindow):
 
     def open_form_project(self):
         """
-        Ouvre la fenêtre de création de projet (form_project.py).
+        Ouvre la fenêtre de création de projet (form_project.py),
+        en passant l’utilisateur courant.
         """
         from gui.form_project import ProjectForm
-        dialog = ProjectForm(self.db)
+        dialog = ProjectForm(self.db, self.user)
         if dialog.exec_() == QDialog.Accepted:
             self.refresh_projects()
 
     def open_thresholds(self):
         """
-        Placeholder pour la gestion des seuils (à implémenter).
+        Ouvre le dialog de gestion des seuils de conformité.
         """
-        QMessageBox.information(
-            self, "Seuils", "Gestion des seuils à venir.", QMessageBox.Ok
-        )
+        from gui.thresholds import ThresholdsDialog
+        dlg = ThresholdsDialog(self.db)
+        dlg.exec_()
 
     def open_form_tests(self):
         """
