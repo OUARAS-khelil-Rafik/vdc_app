@@ -19,7 +19,6 @@ from PyQt5.QtCore import Qt, QDate, QDateTime
 from PyQt5.QtGui import QColor
 
 def dict_from_row(row, columns):
-    """Helper to convert sqlite3.Row or tuple to dict."""
     if isinstance(row, dict):
         return row
     return dict(zip(columns, row))
@@ -88,18 +87,52 @@ class ProjectTable(NoFocusTableWidget):
         item = self.item(sel, 0)
         return item.data(Qt.UserRole) if item else None
 
+class ProjectManager:
+    def __init__(self, db):
+        self.db = db
+
+    def get_projects(self):
+        rows = self.db.conn.execute(
+            "SELECT id, company_name, location, room_type, test_date FROM projects"
+        ).fetchall()
+        columns = ["id", "company_name", "location", "room_type", "test_date"]
+        return [dict_from_row(row, columns) for row in rows]
+
+    def add_project(self, company, location, room, date, user_id):
+        self.db.conn.execute(
+            "INSERT INTO projects (company_name, location, room_type, test_date, created_by) VALUES (?, ?, ?, ?, ?)",
+            (company, location, room, date, user_id)
+        )
+        self.db.conn.commit()
+
+    def update_project(self, project_id, company, location, room, date):
+        self.db.conn.execute(
+            "UPDATE projects SET company_name=?, location=?, room_type=?, test_date=? WHERE id=?",
+            (company, location, room, date, project_id)
+        )
+        self.db.conn.commit()
+
+    def delete_project(self, project_id):
+        self.db.conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+        self.db.conn.commit()
+
+    def get_project(self, project_id):
+        cursor = self.db.conn.execute("SELECT * FROM projects WHERE id=?", (project_id,))
+        row = cursor.fetchone()
+        if row:
+            columns = [col[0] for col in cursor.description]
+            return dict(zip(columns, row))
+        return None
+
 class ProjectForm(QDialog):
     def __init__(self, db, user, project=None):
         super().__init__()
         self.db = db
         self.user = user
+        self.manager = ProjectManager(db)
         self.project = None
         if isinstance(project, int):
-            cursor = self.db.conn.execute("SELECT * FROM projects WHERE id=?", (project,))
-            row = cursor.fetchone()
-            if row:
-                columns = [col[0] for col in cursor.description]
-                self.project = dict(zip(columns, row))
+            self.project = self.manager.get_project(project)
         elif project:
             self.project = project
         self._init_ui()
@@ -168,19 +201,38 @@ class ProjectForm(QDialog):
             return
         try:
             if self.project:
-                self.db.conn.execute(
-                    "UPDATE projects SET company_name=?, location=?, room_type=?, test_date=? WHERE id=?",
-                    (company, location, room, date, self.project["id"])
-                )
+                self.manager.update_project(self.project["id"], company, location, room, date)
             else:
-                self.db.conn.execute(
-                    "INSERT INTO projects (company_name, location, room_type, test_date, created_by) VALUES (?, ?, ?, ?, ?)",
-                    (company, location, room, date, self.user['id'])
-                )
-            self.db.conn.commit()
+                self.manager.add_project(company, location, room, date, self.user['id'])
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Erreur", f"Impossible de {'modifier' if self.project else 'créer'} le projet : {e}", QMessageBox.Ok)
+
+class TestManager:
+    def __init__(self, db):
+        self.db = db
+
+    def get_thresholds(self, iso_class):
+        rows = self.db.conn.execute("SELECT parameter, max_value FROM thresholds WHERE iso_class = ?", (iso_class,)).fetchall()
+        return [(r["parameter"], r["max_value"]) for r in rows]
+
+    def save_test(self, project_id, user_id, point_name, measurements):
+        timestamp = QDateTime.currentDateTime().toString("yyyy-MM-dd HH:mm:ss")
+        cursor = self.db.conn.execute(
+            "INSERT INTO tests (project_id, technician_id, measurement_date) VALUES (?, ?, ?)",
+            (project_id, user_id, timestamp)
+        )
+        test_id = cursor.lastrowid
+        compliant = True
+        for param, value, max_val in measurements:
+            self.db.conn.execute(
+                "INSERT INTO measurements (test_id, point_name, parameter, value) VALUES (?, ?, ?, ?)",
+                (test_id, point_name, param, value)
+            )
+            if value > max_val:
+                compliant = False
+        self.db.conn.commit()
+        return compliant
 
 class TestForm(QDialog):
     def __init__(self, db, project_id, user):
@@ -188,6 +240,7 @@ class TestForm(QDialog):
         self.db = db
         self.project_id = project_id
         self.user = user
+        self.manager = TestManager(db)
         self._init_ui()
 
     def _init_ui(self):
@@ -209,8 +262,7 @@ class TestForm(QDialog):
         """)
         row = self.db.conn.execute("SELECT room_type FROM projects WHERE id = ?", (self.project_id,)).fetchone()
         self.iso_class = row["room_type"]
-        rows = self.db.conn.execute("SELECT parameter, max_value FROM thresholds WHERE iso_class = ?", (self.iso_class,)).fetchall()
-        self.thresholds = [(r["parameter"], r["max_value"]) for r in rows]
+        self.thresholds = self.manager.get_thresholds(self.iso_class)
         form_layout = QFormLayout()
         self.input_point = QLineEdit()
         form_layout.addRow("Point de mesure :", self.input_point)
@@ -220,7 +272,7 @@ class TestForm(QDialog):
             widget = QLineEdit()
             widget.setPlaceholderText("Valeur numérique")
             form_layout.addRow(label, widget)
-            self.widgets[param] = widget
+            self.widgets[param] = (widget, max_val)
         self.btn_save   = QPushButton("Enregistrer")
         self.btn_cancel = QPushButton("Annuler")
         self.btn_save.clicked.connect(self.save_test)
@@ -239,32 +291,54 @@ class TestForm(QDialog):
         if not point_name:
             QMessageBox.warning(self, "Champs manquant", "Merci de renseigner le nom du point de mesure.", QMessageBox.Ok)
             return
-        timestamp = QDateTime.currentDateTime().toString("yyyy-MM-dd HH:mm:ss")
-        cursor = self.db.conn.execute(
-            "INSERT INTO tests (project_id, technician_id, measurement_date) VALUES (?, ?, ?)",
-            (self.project_id, self.user["id"], timestamp)
-        )
-        test_id = cursor.lastrowid
-        compliant = True
-        for param, max_val in self.thresholds:
-            text = self.widgets[param].text().strip()
+        measurements = []
+        for param, (widget, max_val) in self.widgets.items():
+            text = widget.text().strip()
             try:
                 value = float(text)
             except ValueError:
                 QMessageBox.warning(self, "Valeur invalide", f"La valeur pour « {param} » n’est pas un nombre valide.", QMessageBox.Ok)
-                self.db.conn.execute("DELETE FROM tests WHERE id = ?", (test_id,))
-                self.db.conn.commit()
                 return
-            self.db.conn.execute(
-                "INSERT INTO measurements (test_id, point_name, parameter, value) VALUES (?, ?, ?, ?)",
-                (test_id, point_name, param, value)
-            )
-            if value > max_val:
-                compliant = False
-        self.db.conn.commit()
+            measurements.append((param, value, max_val))
+        compliant = self.manager.save_test(self.project_id, self.user["id"], point_name, measurements)
         status = "Conforme" if compliant else "Non conforme"
         QMessageBox.information(self, "Test enregistré", f"Le test a bien été enregistré.\nStatut de conformité : {status}", QMessageBox.Ok)
         self.accept()
+
+class ThresholdManager:
+    def __init__(self, db):
+        self.db = db
+
+    def get_thresholds(self):
+        rows = self.db.conn.execute("SELECT id, iso_class, parameter, max_value FROM thresholds").fetchall()
+        columns = ["id", "iso_class", "parameter", "max_value"]
+        return [dict_from_row(row, columns) for row in rows]
+
+    def add_threshold(self, iso_class, parameter, max_value):
+        self.db.conn.execute(
+            "INSERT INTO thresholds (iso_class, parameter, max_value) VALUES (?, ?, ?)",
+            (iso_class, parameter, max_value)
+        )
+        self.db.conn.commit()
+
+    def update_threshold(self, threshold_id, iso_class, parameter, max_value):
+        self.db.conn.execute(
+            "UPDATE thresholds SET iso_class=?, parameter=?, max_value=? WHERE id=?",
+            (iso_class, parameter, max_value, threshold_id)
+        )
+        self.db.conn.commit()
+
+    def delete_threshold(self, threshold_id):
+        self.db.conn.execute("DELETE FROM thresholds WHERE id = ?", (threshold_id,))
+        self.db.conn.commit()
+
+    def get_threshold(self, threshold_id):
+        row = self.db.conn.execute(
+            "SELECT id, iso_class, parameter, max_value FROM thresholds WHERE id = ?",
+            (threshold_id,)
+        ).fetchone()
+        columns = ["id", "iso_class", "parameter", "max_value"]
+        return dict_from_row(row, columns) if row else None
 
 class ThresholdsTable(QTableWidget):
     HEADERS = ["ID", "Classe ISO", "Paramètre", "Valeur max"]
@@ -354,6 +428,7 @@ class ThresholdsWidget(QWidget):
     def __init__(self, db, parent=None):
         super().__init__(parent)
         self.db = db
+        self.manager = ThresholdManager(db)
         self.setStyleSheet("""
             QWidget { background-color: #e0e0e0; }
             QTableWidget {
@@ -397,9 +472,7 @@ class ThresholdsWidget(QWidget):
         self.refresh_thresholds()
 
     def refresh_thresholds(self):
-        rows = self.db.conn.execute("SELECT id, iso_class, parameter, max_value FROM thresholds").fetchall()
-        columns = ["id", "iso_class", "parameter", "max_value"]
-        dict_rows = [dict_from_row(row, columns) for row in rows]
+        dict_rows = self.manager.get_thresholds()
         self.table.populate(dict_rows)
         for i in range(self.table.rowCount()):
             for j in range(self.table.columnCount()):
@@ -421,11 +494,7 @@ class ThresholdsWidget(QWidget):
                 QMessageBox.warning(self, "Valeur incorrecte", "La valeur max doit être un nombre.", QMessageBox.Ok)
                 return
             try:
-                self.db.conn.execute(
-                    "INSERT INTO thresholds (iso_class, parameter, max_value) VALUES (?, ?, ?)",
-                    (data["iso_class"], data["parameter"], mv)
-                )
-                self.db.conn.commit()
+                self.manager.add_threshold(data["iso_class"], data["parameter"], mv)
                 self.refresh_thresholds()
             except Exception as e:
                 QMessageBox.critical(self, "Erreur", f"Impossible d’ajouter le seuil : {e}", QMessageBox.Ok)
@@ -435,15 +504,10 @@ class ThresholdsWidget(QWidget):
         if threshold_id is None:
             QMessageBox.warning(self, "Aucune sélection", "Veuillez sélectionner un seuil à modifier.", QMessageBox.Ok)
             return
-        row = self.db.conn.execute(
-            "SELECT id, iso_class, parameter, max_value FROM thresholds WHERE id = ?",
-            (threshold_id,)
-        ).fetchone()
-        if not row:
+        threshold = self.manager.get_threshold(threshold_id)
+        if not threshold:
             QMessageBox.warning(self, "Erreur", "Seuil non trouvé.", QMessageBox.Ok)
             return
-        columns = ["id", "iso_class", "parameter", "max_value"]
-        threshold = dict_from_row(row, columns)
         dialog = ThresholdForm(self.db, threshold)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
@@ -456,11 +520,7 @@ class ThresholdsWidget(QWidget):
                 QMessageBox.warning(self, "Valeur incorrecte", "La valeur max doit être un nombre.", QMessageBox.Ok)
                 return
             try:
-                self.db.conn.execute(
-                    "UPDATE thresholds SET iso_class=?, parameter=?, max_value=? WHERE id=?",
-                    (data["iso_class"], data["parameter"], mv, threshold_id)
-                )
-                self.db.conn.commit()
+                self.manager.update_threshold(threshold_id, data["iso_class"], data["parameter"], mv)
                 self.refresh_thresholds()
             except Exception as e:
                 QMessageBox.critical(self, "Erreur", f"Impossible de modifier le seuil : {e}", QMessageBox.Ok)
@@ -475,8 +535,7 @@ class ThresholdsWidget(QWidget):
         )
         if confirm == QMessageBox.Yes:
             try:
-                self.db.conn.execute("DELETE FROM thresholds WHERE id = ?", (threshold_id,))
-                self.db.conn.commit()
+                self.manager.delete_threshold(threshold_id)
                 self.refresh_thresholds()
             except Exception as e:
                 QMessageBox.critical(self, "Erreur", f"Impossible de supprimer le seuil : {e}", QMessageBox.Ok)
@@ -498,7 +557,6 @@ class DashboardToolbar(QToolBar):
             'thresholds': QAction("Seuils", self),
             'logout': QAction("Déconnexion", self)
         }
-        # Spacer for centering
         self.spacer_left = QWidget()
         self.spacer_left.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.spacer_right = QWidget()
@@ -515,6 +573,7 @@ class DashboardWindow(QMainWindow):
         super().__init__()
         self.db = db
         self.user = user
+        self.project_manager = ProjectManager(db)
         self._init_ui()
         self.refresh_projects()
 
@@ -546,7 +605,6 @@ class DashboardWindow(QMainWindow):
             }
             QPushButton:hover { background-color: #b8d5ed; color: #1c5ea3; }
         """)
-        # Toolbar centering using a QWidget wrapper
         toolbar_container = QWidget()
         toolbar_layout = QHBoxLayout(toolbar_container)
         toolbar_layout.setContentsMargins(0, 0, 0, 0)
@@ -574,7 +632,6 @@ class DashboardWindow(QMainWindow):
         self.table_projects = ProjectTable()
         self.project_table_layout.addWidget(self.table_projects, stretch=1)
 
-        # Add project action buttons (Ajouter, Supprimer, Modifier, Saisir Test, Valider Test, Générer un PDF)
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
         self.btn_ajouter = QPushButton("Ajouter Projet")
@@ -628,11 +685,7 @@ class DashboardWindow(QMainWindow):
                 self.table_projects.setColumnWidth(i, width)
 
     def refresh_projects(self):
-        rows = self.db.conn.execute(
-            "SELECT id, company_name, location, room_type, test_date FROM projects"
-        ).fetchall()
-        columns = ["id", "company_name", "location", "room_type", "test_date"]
-        dict_rows = [dict_from_row(row, columns) for row in rows]
+        dict_rows = self.project_manager.get_projects()
         self.table_projects.populate(dict_rows)
 
     def add_project(self):
@@ -690,8 +743,7 @@ class DashboardWindow(QMainWindow):
             QMessageBox.Yes | QMessageBox.No
         )
         if reply == QMessageBox.Yes:
-            self.db.conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
-            self.db.conn.commit()
+            self.project_manager.delete_project(project_id)
             self.refresh_projects()
 
     def edit_selected_project(self):
