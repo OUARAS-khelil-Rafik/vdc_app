@@ -692,6 +692,28 @@ class DashboardWindow(QMainWindow):
         dialog = ProjectForm(self.db, self.user)
         if dialog.exec_() == QDialog.Accepted:
             self.refresh_projects()
+    
+    def delete_selected_project(self):
+        project_id = self.table_projects.get_selected_project_id()
+        if project_id is None:
+            QMessageBox.warning(self, "Aucun projet", "Veuillez sélectionner un projet à supprimer.", QMessageBox.Ok)
+            return
+        reply = QMessageBox.question(
+            self, "Confirmation", "Voulez-vous vraiment supprimer ce projet ?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            self.project_manager.delete_project(project_id)
+            self.refresh_projects()
+
+    def edit_selected_project(self):
+        project_id = self.table_projects.get_selected_project_id()
+        if project_id is None:
+            QMessageBox.warning(self, "Aucun projet", "Veuillez sélectionner un projet à modifier.", QMessageBox.Ok)
+            return
+        dialog = ProjectForm(self.db, self.user, project_id)
+        if dialog.exec_() == QDialog.Accepted:
+            self.refresh_projects()
 
     def tests(self):
         project_id = self.table_projects.get_selected_project_id()
@@ -732,25 +754,3 @@ class DashboardWindow(QMainWindow):
         self.login_window = LoginWindow(self.db)
         self.login_window.show()
         self.close()
-
-    def delete_selected_project(self):
-        project_id = self.table_projects.get_selected_project_id()
-        if project_id is None:
-            QMessageBox.warning(self, "Aucun projet", "Veuillez sélectionner un projet à supprimer.", QMessageBox.Ok)
-            return
-        reply = QMessageBox.question(
-            self, "Confirmation", "Voulez-vous vraiment supprimer ce projet ?",
-            QMessageBox.Yes | QMessageBox.No
-        )
-        if reply == QMessageBox.Yes:
-            self.project_manager.delete_project(project_id)
-            self.refresh_projects()
-
-    def edit_selected_project(self):
-        project_id = self.table_projects.get_selected_project_id()
-        if project_id is None:
-            QMessageBox.warning(self, "Aucun projet", "Veuillez sélectionner un projet à modifier.", QMessageBox.Ok)
-            return
-        dialog = ProjectForm(self.db, self.user, project_id)
-        if dialog.exec_() == QDialog.Accepted:
-            self.refresh_projects()
