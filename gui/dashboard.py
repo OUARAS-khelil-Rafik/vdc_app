@@ -13,7 +13,7 @@ import os
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QVBoxLayout,
-    QHBoxLayout, QMessageBox, QDialog
+    QHBoxLayout, QMessageBox, QDialog, QHeaderView
 )
 from PyQt5.QtCore import Qt
 
@@ -87,15 +87,18 @@ class DashboardWindow(QMainWindow):
         welcome.setAlignment(Qt.AlignCenter)
         layout.addWidget(welcome)
 
-        # Tableau des projets
+        # Tableau des projets (sans colonne ID)
         self.table_projects = QTableWidget()
-        self.table_projects.setColumnCount(5)
+        self.table_projects.setColumnCount(4)
         self.table_projects.setHorizontalHeaderLabels([
-            "ID", "Entreprise", "Localisation", "Type de salle", "Date de test"
+            "Entreprise", "Localisation", "Type de salle", "Date de test"
         ])
         self.table_projects.setSelectionBehavior(self.table_projects.SelectRows)
         self.table_projects.setEditTriggers(self.table_projects.NoEditTriggers)
-        layout.addWidget(self.table_projects)
+        self.table_projects.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table_projects.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.table_projects.setSizePolicy(self.table_projects.sizePolicy().horizontalPolicy(), self.table_projects.sizePolicy().verticalPolicy())
+        layout.addWidget(self.table_projects, stretch=1)
 
         # Barre de boutons d’actions
         btn_layout = QHBoxLayout()
@@ -133,6 +136,7 @@ class DashboardWindow(QMainWindow):
 
         # Ajuster la visibilité des boutons selon le rôle
         role = self.user['role']
+        # Par défaut, tout est visible (Admin)
         if role == 'Technicien':
             self.btn_new_project.hide()
             self.btn_thresholds.hide()
@@ -152,12 +156,26 @@ class DashboardWindow(QMainWindow):
         ).fetchall()
         self.table_projects.setRowCount(len(rows))
         for i, row in enumerate(rows):
-            self.table_projects.setItem(i, 0, QTableWidgetItem(str(row['id'])))
-            self.table_projects.setItem(i, 1, QTableWidgetItem(row['company_name']))
-            self.table_projects.setItem(i, 2, QTableWidgetItem(row['location']))
-            self.table_projects.setItem(i, 3, QTableWidgetItem(row['room_type']))
-            self.table_projects.setItem(i, 4, QTableWidgetItem(row['test_date']))
+            # On n'affiche pas l'ID, mais on le stocke dans l'objet QTableWidgetItem (data Qt.UserRole)
+            item_company = QTableWidgetItem(row['company_name'])
+            item_company.setData(Qt.UserRole, row['id'])
+            self.table_projects.setItem(i, 0, item_company)
+            self.table_projects.setItem(i, 1, QTableWidgetItem(row['location']))
+            self.table_projects.setItem(i, 2, QTableWidgetItem(row['room_type']))
+            self.table_projects.setItem(i, 3, QTableWidgetItem(row['test_date']))
         self.table_projects.resizeColumnsToContents()
+
+    def get_selected_project_id(self):
+        """
+        Récupère l'ID du projet sélectionné (stocké dans Qt.UserRole de la première colonne).
+        """
+        sel = self.table_projects.currentRow()
+        if sel < 0:
+            return None
+        item = self.table_projects.item(sel, 0)
+        if item is None:
+            return None
+        return item.data(Qt.UserRole)
 
     def open_form_project(self):
         """
@@ -181,19 +199,28 @@ class DashboardWindow(QMainWindow):
         """
         Ouvre la fenêtre de saisie des tests pour le projet sélectionné.
         """
-        sel = self.table_projects.currentRow()
-        if sel < 0:
+        project_id = self.get_selected_project_id()
+        if project_id is None:
             QMessageBox.warning(self, "Aucun projet", "Veuillez sélectionner un projet.", QMessageBox.Ok)
             return
-        project_id = int(self.table_projects.item(sel, 0).text())
         from gui.form_tests import TestForm
         dialog = TestForm(self.db, project_id, self.user)
         dialog.exec_()
 
     def open_validate_tests(self):
         """
-        Placeholder pour la validation des tests (à implémenter).
+        Ouvre la fenêtre de validation des tests pour le projet sélectionné.
+        (Admin et Technicien premium uniquement)
         """
+        role = self.user['role']
+        if role not in ('Administrateur', 'Technicien premium'):
+            QMessageBox.warning(self, "Accès refusé", "Vous n'avez pas accès à cette fonctionnalité.", QMessageBox.Ok)
+            return
+        project_id = self.get_selected_project_id()
+        if project_id is None:
+            QMessageBox.warning(self, "Aucun projet", "Veuillez sélectionner un projet.", QMessageBox.Ok)
+            return
+        # À remplacer par la vraie fenêtre de validation
         QMessageBox.information(
             self, "Validation", "Fonctionnalité de validation à venir.", QMessageBox.Ok
         )
@@ -201,12 +228,16 @@ class DashboardWindow(QMainWindow):
     def generate_pdf(self):
         """
         Génère le PDF du projet sélectionné via pdf/generator.py.
+        (Admin uniquement)
         """
-        sel = self.table_projects.currentRow()
-        if sel < 0:
+        role = self.user['role']
+        if role != 'Administrateur':
+            QMessageBox.warning(self, "Accès refusé", "Seul un administrateur peut générer un PDF.", QMessageBox.Ok)
+            return
+        project_id = self.get_selected_project_id()
+        if project_id is None:
             QMessageBox.warning(self, "Aucun projet", "Veuillez sélectionner un projet.", QMessageBox.Ok)
             return
-        project_id = int(self.table_projects.item(sel, 0).text())
         from pdf.generator import PDFGenerator
         gen = PDFGenerator(self.db)
         save_path = os.path.join(os.getcwd(), f"rapport_projet_{project_id}.pdf")
