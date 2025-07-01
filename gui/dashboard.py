@@ -11,11 +11,17 @@ selon le rôle de l’utilisateur (Administrateur, Technicien, Technicien premiu
 
 import os
 from PyQt5.QtWidgets import (
-    QMainWindow, QWidget, QLabel, QPushButton,
-    QTableWidget, QTableWidgetItem, QVBoxLayout,
-    QHBoxLayout, QMessageBox, QDialog, QHeaderView, QSizePolicy
+    QMainWindow, QWidget, QLabel, QTableWidget, QTableWidgetItem, QVBoxLayout,
+    QHBoxLayout, QMessageBox, QDialog, QHeaderView, QSizePolicy, QToolBar, QAction,
+    QPushButton, QSpacerItem
 )
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QColor
+
+class NoFocusTableWidget(QTableWidget):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setFocusPolicy(Qt.NoFocus)
 
 class DashboardWindow(QMainWindow):
     def __init__(self, db, user):
@@ -46,12 +52,11 @@ class DashboardWindow(QMainWindow):
                 margin-bottom: 10px;
             }
             QTableWidget {
-                background-color: #ffffff;
-                border: 1px solid #b8d5ed;
+                border: none;
                 font-size: 15px;
                 selection-background-color: #b8d5ed;
                 selection-color: #1c5ea3;
-                gridline-color: #b8d5ed;
+                gridline-color: #333333;
             }
             QHeaderView::section {
                 background-color: #1c5ea3;
@@ -59,22 +64,75 @@ class DashboardWindow(QMainWindow):
                 font-weight: bold;
                 border: none;
                 padding: 6px;
+                qproperty-alignment: 'AlignCenter | AlignVCenter';
+            }
+            QToolButton {
+                background: transparent;
+                border: none;
+                color: #1c5ea3;
+                font-size: 15px;
+                font-weight: bold;
+                padding: 8px 18px;
+                margin: 0 4px;
+            }
+            QToolButton:hover {
+                color: #b8d5ed;
             }
             QPushButton {
                 background-color: #1c5ea3;
-                color: #ffffff;
-                border-radius: 7px;
-                padding: 8px 18px;
+                color: #fff;
                 font-size: 15px;
                 font-weight: bold;
-                margin: 0 4px;
+                border-radius: 8px;
+                padding: 8px 24px;
+                margin: 8px 8px 0 0;
             }
             QPushButton:hover {
                 background-color: #b8d5ed;
                 color: #1c5ea3;
-                border: 1px solid #1c5ea3;
             }
         """)
+
+        # Toolbar en haut (remplace les boutons classiques)
+        toolbar = QToolBar()
+        toolbar.setMovable(False)
+        toolbar.setStyleSheet("background: #e0e0e0; border: none;")
+        self.addToolBar(Qt.TopToolBarArea, toolbar)
+
+        # Actions (icônes facultatives, texte seulement ici)
+        self.action_projects = QAction("Projets", self)
+        self.action_projects.triggered.connect(self.show_dashboard)
+        self.action_thresholds = QAction("Seuils", self)
+        self.action_thresholds.triggered.connect(self.open_thresholds)
+        self.action_input_tests = QAction("Saisie tests", self)
+        self.action_input_tests.triggered.connect(self.open_form_tests)
+        self.action_validate = QAction("Valider tests", self)
+        self.action_validate.triggered.connect(self.open_validate_tests)
+        self.action_generate_pdf = QAction("Générer PDF", self)
+        self.action_generate_pdf.triggered.connect(self.generate_pdf)
+        self.action_logout = QAction("Déconnexion", self)
+        self.action_logout.triggered.connect(self.logout)
+
+        # Ajout des actions selon le rôle
+        role = self.user['role']
+        # Ajout d'un spacer pour pousser les actions à droite
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        toolbar.addWidget(spacer)
+        if role == 'Administrateur':
+            toolbar.addAction(self.action_projects)
+            toolbar.addAction(self.action_thresholds)
+            toolbar.addAction(self.action_input_tests)
+            toolbar.addAction(self.action_validate)
+            toolbar.addAction(self.action_generate_pdf)
+        elif role == 'Technicien premium':
+            toolbar.addAction(self.action_thresholds)
+            toolbar.addAction(self.action_input_tests)
+            toolbar.addAction(self.action_validate)
+        elif role == 'Technicien':
+            toolbar.addAction(self.action_input_tests)
+        toolbar.addSeparator()
+        toolbar.addAction(self.action_logout)
 
         # Widget central
         central = QWidget()
@@ -87,13 +145,14 @@ class DashboardWindow(QMainWindow):
         welcome.setAlignment(Qt.AlignCenter)
         layout.addWidget(welcome)
 
-        # Tableau des projets (sans colonne ID)
-        self.table_projects = QTableWidget()
-        self.table_projects.setColumnCount(4)
+        # Tableau des projets (affiche la colonne ID)
+        self.table_projects = NoFocusTableWidget()
+        self.table_projects.setColumnCount(5)
         self.table_projects.setHorizontalHeaderLabels([
-            "Entreprise", "Localisation", "Type de salle", "Date de test"
+            "ID", "Entreprise", "Localisation", "Type de salle", "Date de test"
         ])
         self.table_projects.setSelectionBehavior(self.table_projects.SelectRows)
+        self.table_projects.setSelectionMode(self.table_projects.ExtendedSelection)
         self.table_projects.setEditTriggers(self.table_projects.NoEditTriggers)
         self.table_projects.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table_projects.verticalHeader().setSectionResizeMode(QHeaderView.Stretch)
@@ -101,87 +160,89 @@ class DashboardWindow(QMainWindow):
         self.table_projects.setMinimumHeight(200)
         layout.addWidget(self.table_projects, stretch=1)
 
-        # Barre de boutons d’actions
-        btn_layout = QHBoxLayout()
-        layout.addLayout(btn_layout)
-
-        # Nouveau projet (Admin uniquement)
-        self.btn_new_project = QPushButton("Nouveau projet")
-        self.btn_new_project.clicked.connect(self.open_form_project)
-        btn_layout.addWidget(self.btn_new_project)
-
-        # Seuils de conformité (Admin + Technicien premium)
-        self.btn_thresholds = QPushButton("Seuils")
-        self.btn_thresholds.clicked.connect(self.open_thresholds)
-        btn_layout.addWidget(self.btn_thresholds)
-
-        # Saisie des tests (tous profils)
-        self.btn_input_tests = QPushButton("Saisie tests")
-        self.btn_input_tests.clicked.connect(self.open_form_tests)
-        btn_layout.addWidget(self.btn_input_tests)
-
-        # Validation des tests (Admin + Technicien premium)
-        self.btn_validate = QPushButton("Valider tests")
-        self.btn_validate.clicked.connect(self.open_validate_tests)
-        btn_layout.addWidget(self.btn_validate)
-
-        # Génération de rapport PDF (Admin uniquement)
-        self.btn_generate_pdf = QPushButton("Générer PDF")
-        self.btn_generate_pdf.clicked.connect(self.generate_pdf)
-        btn_layout.addWidget(self.btn_generate_pdf)
-
-        # Déconnexion (tous profils)
-        self.btn_logout = QPushButton("Déconnexion")
-        self.btn_logout.clicked.connect(self.logout)
-        btn_layout.addWidget(self.btn_logout)
-
-        # Ajuster la visibilité des boutons selon le rôle
-        role = self.user['role']
-        # Par défaut, tout est visible (Admin)
-        if role == 'Technicien':
-            self.btn_new_project.hide()
-            self.btn_thresholds.hide()
-            self.btn_validate.hide()
-            self.btn_generate_pdf.hide()
-        elif role == 'Technicien premium':
-            self.btn_new_project.hide()
-            self.btn_generate_pdf.hide()
-        # Administrateur : tout visible
+        # Masquer la colonne des numéros de ligne (vertical header)
+        self.table_projects.verticalHeader().setVisible(False)
 
         # Permettre à la table de s'ajuster dynamiquement à la fenêtre
         self.table_projects.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table_projects.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.table_projects.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
+        # --- Ajout des boutons sous le tableau, centrés ---
+        if role == 'Administrateur':
+            btn_layout = QHBoxLayout()
+            btn_layout.addStretch()
+            self.btn_ajouter = QPushButton("Ajouter Projet")
+            self.btn_supprimer = QPushButton("Supprimer Projet")
+            self.btn_modifier = QPushButton("Modifier Projet")
+            btn_layout.addWidget(self.btn_ajouter)
+            btn_layout.addWidget(self.btn_supprimer)
+            btn_layout.addWidget(self.btn_modifier)
+            btn_layout.addStretch()
+            layout.addLayout(btn_layout)
+
+            self.btn_ajouter.clicked.connect(self.open_form_project)
+            self.btn_supprimer.clicked.connect(self.delete_selected_project)
+            self.btn_modifier.clicked.connect(self.edit_selected_project)
+
+        # Aligner les titres du header au centre
+        header = self.table_projects.horizontalHeader()
+        for i in range(self.table_projects.columnCount()):
+            header.setDefaultAlignment(Qt.AlignCenter | Qt.AlignVCenter)
+
+    def show_dashboard(self):
+        """
+        Affiche le dashboard (rafraîchit la liste des projets).
+        """
+        self.refresh_projects()
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self.table_projects.setColumnWidth(0, self.table_projects.width() // 4)
-        self.table_projects.setColumnWidth(1, self.table_projects.width() // 4)
-        self.table_projects.setColumnWidth(2, self.table_projects.width() // 4)
-        self.table_projects.setColumnWidth(3, self.table_projects.width() // 4)
+        col_count = self.table_projects.columnCount()
+        for i in range(col_count):
+            self.table_projects.setColumnWidth(i, self.table_projects.width() // col_count)
 
     def refresh_projects(self):
         """
         Recharge la liste des projets depuis la base SQLite.
+        Centre les valeurs dans le tableau.
         """
         rows = self.db.conn.execute(
             "SELECT id, company_name, location, room_type, test_date FROM projects"
         ).fetchall()
         self.table_projects.setRowCount(len(rows))
         for i, row in enumerate(rows):
-            # On n'affiche pas l'ID, mais on le stocke dans l'objet QTableWidgetItem (data Qt.UserRole)
+            # Affiche l'ID dans la première colonne
+            item_id = QTableWidgetItem(str(row['id']))
+            item_id.setData(Qt.UserRole, row['id'])
+            item_id.setTextAlignment(Qt.AlignCenter)
+            item_id.setBackground(QColor(Qt.white))
             item_company = QTableWidgetItem(row['company_name'])
-            item_company.setData(Qt.UserRole, row['id'])
-            self.table_projects.setItem(i, 0, item_company)
-            self.table_projects.setItem(i, 1, QTableWidgetItem(row['location']))
-            self.table_projects.setItem(i, 2, QTableWidgetItem(row['room_type']))
-            self.table_projects.setItem(i, 3, QTableWidgetItem(row['test_date']))
+            item_company.setTextAlignment(Qt.AlignCenter)
+            item_company.setBackground(QColor(Qt.white))
+            item_location = QTableWidgetItem(row['location'])
+            item_location.setTextAlignment(Qt.AlignCenter)
+            item_location.setBackground(QColor(Qt.white))
+            item_room = QTableWidgetItem(row['room_type'])
+            item_room.setTextAlignment(Qt.AlignCenter)
+            item_room.setBackground(QColor(Qt.white))
+            item_date = QTableWidgetItem(row['test_date'])
+            item_date.setTextAlignment(Qt.AlignCenter)
+            item_date.setBackground(QColor(Qt.white))
+            self.table_projects.setItem(i, 0, item_id)
+            self.table_projects.setItem(i, 1, item_company)
+            self.table_projects.setItem(i, 2, item_location)
+            self.table_projects.setItem(i, 3, item_room)
+            self.table_projects.setItem(i, 4, item_date)
         self.table_projects.resizeColumnsToContents()
         self.table_projects.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
     def get_selected_project_id(self):
         """
-        Récupère l'ID du projet sélectionné (stocké dans Qt.UserRole de la première colonne).
+        Récupère l'ID du projet sélectionné (stocké dans Qt.UserRole de la colonne ID).
         """
         sel = self.table_projects.currentRow()
         if sel < 0:
@@ -268,3 +329,33 @@ class DashboardWindow(QMainWindow):
         self.login_window = LoginWindow(self.db)
         self.login_window.show()
         self.close()
+
+    def delete_selected_project(self):
+        """
+        Supprime le projet sélectionné après confirmation.
+        """
+        project_id = self.get_selected_project_id()
+        if project_id is None:
+            QMessageBox.warning(self, "Aucun projet", "Veuillez sélectionner un projet à supprimer.", QMessageBox.Ok)
+            return
+        reply = QMessageBox.question(
+            self, "Confirmation", "Voulez-vous vraiment supprimer ce projet ?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            self.db.conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
+            self.db.conn.commit()
+            self.refresh_projects()
+
+    def edit_selected_project(self):
+        """
+        Ouvre la fenêtre de modification du projet sélectionné.
+        """
+        project_id = self.get_selected_project_id()
+        if project_id is None:
+            QMessageBox.warning(self, "Aucun projet", "Veuillez sélectionner un projet à modifier.", QMessageBox.Ok)
+            return
+        from gui.form_project import ProjectForm
+        dialog = ProjectForm(self.db, self.user, project_id)
+        if dialog.exec_() == QDialog.Accepted:
+            self.refresh_projects()
