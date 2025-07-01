@@ -11,31 +11,35 @@ import sys
 import os
 from PyQt5.QtWidgets import QApplication
 
-# Assurez-vous que le répertoire `data/` existe
-DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
-DB_PATH = os.path.join(DATA_DIR, "vdc.db")
-
 from models.database import Database
 from gui.login import LoginWindow
 
-def main():
-    # Création du dossier data s'il n'existe pas
+DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+DB_PATH = os.path.join(DATA_DIR, "vdc.db")
+
+def ensure_data_dir():
     if not os.path.isdir(DATA_DIR):
         os.makedirs(DATA_DIR)
 
-    # Initialisation de la base SQLite
+def initialize_database():
     db = Database(DB_PATH)
-    db.initialize()  # Crée les tables si nécessaire
+    db.initialize()
+    try:
+        db.create_user("admin", "admin", "Administrateur")
+    except Exception as e:
+        pass  # Ignore if user already exists
+    return db
 
-    # Initialisation de l'application Qt
+def main():
+    ensure_data_dir()
+    db = initialize_database()
+
     app = QApplication(sys.argv)
     app.setApplicationName("VDC Engineering")
 
-    # Affichage de la fenêtre de connexion
     login_win = LoginWindow(db)
     login_win.show()
 
-    # Lancement de la boucle événementielle
     sys.exit(app.exec_())
 
 if __name__ == "__main__":
