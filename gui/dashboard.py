@@ -358,7 +358,7 @@ class ThresholdsWidget(QWidget):
         self.setStyleSheet("""
             QWidget { background-color: #e0e0e0; }
             QTableWidget {
-                background-color: #fff; alternate-background-color: #b8d5ed;
+                background-color: #fff; alternate-background-color: #fff;
                 gridline-color: #1c5ea3; selection-background-color: #b8d5ed;
                 selection-color: #1c5ea3; border: 2px solid #1c5ea3; font-size: 15px;
                 border-radius: 8px;
@@ -378,6 +378,7 @@ class ThresholdsWidget(QWidget):
             QPushButton:hover { background-color: #b8d5ed; color: #1c5ea3; }
         """)
         self.table = ThresholdsTable()
+        self.table.setFocusPolicy(Qt.NoFocus)  # Remove focus from table
         self.btn_add = QPushButton("Ajouter Seuil")
         self.btn_edit = QPushButton("Modifier Seuil")
         self.btn_delete = QPushButton("Supprimer Seuil")
@@ -385,13 +386,14 @@ class ThresholdsWidget(QWidget):
         self.btn_edit.clicked.connect(self.edit_threshold)
         self.btn_delete.clicked.connect(self.delete_threshold)
         btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
         btn_layout.addWidget(self.btn_add)
         btn_layout.addWidget(self.btn_edit)
         btn_layout.addWidget(self.btn_delete)
         btn_layout.addStretch()
         layout = QVBoxLayout()
-        layout.addLayout(btn_layout)
         layout.addWidget(self.table)
+        layout.addLayout(btn_layout)
         self.setLayout(layout)
         self.refresh_thresholds()
 
@@ -400,6 +402,13 @@ class ThresholdsWidget(QWidget):
         columns = ["id", "iso_class", "parameter", "max_value"]
         dict_rows = [dict_from_row(row, columns) for row in rows]
         self.table.populate(dict_rows)
+        # Set all rows' background to white and center align text
+        for i in range(self.table.rowCount()):
+            for j in range(self.table.columnCount()):
+                item = self.table.item(i, j)
+                if item:
+                    item.setBackground(QColor(Qt.white))
+                    item.setTextAlignment(Qt.AlignCenter)
 
     def add_threshold(self):
         dialog = ThresholdForm(self.db)
