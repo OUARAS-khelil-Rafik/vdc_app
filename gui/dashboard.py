@@ -46,7 +46,6 @@ class ProjectTable(NoFocusTableWidget):
         self.setMinimumHeight(200)
         self.verticalHeader().setVisible(False)
         self.horizontalHeader().setDefaultAlignment(Qt.AlignCenter | Qt.AlignVCenter)
-        # Style pour border comme ThresholdsTable
         self.setStyleSheet("""
             QTableWidget {
                 background-color: #fff; 
@@ -378,7 +377,7 @@ class ThresholdsWidget(QWidget):
             QPushButton:hover { background-color: #b8d5ed; color: #1c5ea3; }
         """)
         self.table = ThresholdsTable()
-        self.table.setFocusPolicy(Qt.NoFocus)  # Remove focus from table
+        self.table.setFocusPolicy(Qt.NoFocus)
         self.btn_add = QPushButton("Ajouter Seuil")
         self.btn_edit = QPushButton("Modifier Seuil")
         self.btn_delete = QPushButton("Supprimer Seuil")
@@ -402,7 +401,6 @@ class ThresholdsWidget(QWidget):
         columns = ["id", "iso_class", "parameter", "max_value"]
         dict_rows = [dict_from_row(row, columns) for row in rows]
         self.table.populate(dict_rows)
-        # Set all rows' background to white and center align text
         for i in range(self.table.rowCount()):
             for j in range(self.table.columnCount()):
                 item = self.table.item(i, j)
@@ -498,9 +496,6 @@ class DashboardToolbar(QToolBar):
         self.actions_dict = {
             'projects': QAction("Projets", self),
             'thresholds': QAction("Seuils", self),
-            'input_tests': QAction("Saisir Tests", self),
-            'validate': QAction("Valider Tests", self),
-            'generate_pdf': QAction("Générer PDF", self),
             'logout': QAction("Déconnexion", self)
         }
         # Spacer for centering
@@ -511,11 +506,6 @@ class DashboardToolbar(QToolBar):
         self.addWidget(self.spacer_left)
         self.addAction(self.actions_dict['projects'])
         self.addAction(self.actions_dict['thresholds'])
-        self.addAction(self.actions_dict['input_tests'])
-        if user['role'] in ('Administrateur', 'Technicien premium'):
-            self.addAction(self.actions_dict['validate'])
-        if user['role'] == 'Administrateur':
-            self.addAction(self.actions_dict['generate_pdf'])
         self.addSeparator()
         self.addAction(self.actions_dict['logout'])
         self.addWidget(self.spacer_right)
@@ -551,7 +541,7 @@ class DashboardWindow(QMainWindow):
             }
             QToolButton:hover { color: #b8d5ed; }
             QPushButton {
-                background-color: #1c5ea3; color: #fff; font-size: 15px; font-weight: bold;
+                background-color: #1c5ea3; color: #fff; font-size: 10px; font-weight: bold;
                 border-radius: 8px; padding: 8px 24px; margin: 8px 8px 0 0;
             }
             QPushButton:hover { background-color: #b8d5ed; color: #1c5ea3; }
@@ -568,9 +558,6 @@ class DashboardWindow(QMainWindow):
 
         self.toolbar.actions_dict['projects'].triggered.connect(self.show_dashboard)
         self.toolbar.actions_dict['thresholds'].triggered.connect(self.show_thresholds)
-        self.toolbar.actions_dict['input_tests'].triggered.connect(self.tests)
-        self.toolbar.actions_dict['validate'].triggered.connect(self.validate_tests)
-        self.toolbar.actions_dict['generate_pdf'].triggered.connect(self.generate_pdf)
         self.toolbar.actions_dict['logout'].triggered.connect(self.logout)
         self.central = QWidget()
         self.central_layout = QVBoxLayout(self.central)
@@ -586,20 +573,31 @@ class DashboardWindow(QMainWindow):
         self.project_table_layout = QVBoxLayout(self.project_table_widget)
         self.table_projects = ProjectTable()
         self.project_table_layout.addWidget(self.table_projects, stretch=1)
-        if self.user['role'] == 'Administrateur':
-            btn_layout = QHBoxLayout()
-            btn_layout.addStretch()
-            self.btn_ajouter = QPushButton("Ajouter Projet")
-            self.btn_supprimer = QPushButton("Supprimer Projet")
-            self.btn_modifier = QPushButton("Modifier Projet")
-            btn_layout.addWidget(self.btn_ajouter)
-            btn_layout.addWidget(self.btn_supprimer)
-            btn_layout.addWidget(self.btn_modifier)
-            btn_layout.addStretch()
-            self.project_table_layout.addLayout(btn_layout)
-            self.btn_ajouter.clicked.connect(self.add_project)
-            self.btn_supprimer.clicked.connect(self.delete_selected_project)
-            self.btn_modifier.clicked.connect(self.edit_selected_project)
+
+        # Add project action buttons (Ajouter, Supprimer, Modifier, Saisir Test, Valider Test, Générer un PDF)
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        self.btn_ajouter = QPushButton("Ajouter Projet")
+        self.btn_supprimer = QPushButton("Supprimer Projet")
+        self.btn_modifier = QPushButton("Modifier Projet")
+        self.btn_saisir_test = QPushButton("Saisir Test")
+        self.btn_valider_test = QPushButton("Valider Test")
+        self.btn_generer_pdf = QPushButton("Générer un PDF")
+        btn_layout.addWidget(self.btn_ajouter)
+        btn_layout.addWidget(self.btn_supprimer)
+        btn_layout.addWidget(self.btn_modifier)
+        btn_layout.addWidget(self.btn_saisir_test)
+        btn_layout.addWidget(self.btn_valider_test)
+        btn_layout.addWidget(self.btn_generer_pdf)
+        btn_layout.addStretch()
+        self.project_table_layout.addLayout(btn_layout)
+        self.btn_ajouter.clicked.connect(self.add_project)
+        self.btn_supprimer.clicked.connect(self.delete_selected_project)
+        self.btn_modifier.clicked.connect(self.edit_selected_project)
+        self.btn_saisir_test.clicked.connect(self.tests)
+        self.btn_valider_test.clicked.connect(self.validate_tests)
+        self.btn_generer_pdf.clicked.connect(self.generate_pdf)
+
         self.thresholds_widget = ThresholdsWidget(self.db)
         self.content_layout.addWidget(self.project_table_widget)
         self.project_table_widget.show()
