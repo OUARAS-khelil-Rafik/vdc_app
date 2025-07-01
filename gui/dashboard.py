@@ -41,7 +41,6 @@ class DashboardWindow(QMainWindow):
                 color: #1c5ea3;
                 font-size: 22px;
                 font-weight: bold;
-                background: #b8d5ed;
                 border-radius: 10px;
                 padding: 12px;
                 margin-bottom: 10px;
