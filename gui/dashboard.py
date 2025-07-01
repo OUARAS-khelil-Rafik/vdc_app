@@ -487,6 +487,14 @@ class DashboardToolbar(QToolBar):
     def __init__(self, user, parent=None):
         super().__init__("Tableau de bord", parent)
         self.setMovable(False)
+        self.setStyleSheet("""
+            QToolBar {
+                background: transparent;
+                border: none;
+                spacing: 0px;
+                padding: 0px;
+            }
+        """)
         self.actions_dict = {
             'projects': QAction("Projets", self),
             'thresholds': QAction("Seuils", self),
@@ -495,6 +503,12 @@ class DashboardToolbar(QToolBar):
             'generate_pdf': QAction("Générer PDF", self),
             'logout': QAction("Déconnexion", self)
         }
+        # Spacer for centering
+        self.spacer_left = QWidget()
+        self.spacer_left.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.spacer_right = QWidget()
+        self.spacer_right.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.addWidget(self.spacer_left)
         self.addAction(self.actions_dict['projects'])
         self.addAction(self.actions_dict['thresholds'])
         self.addAction(self.actions_dict['input_tests'])
@@ -504,6 +518,7 @@ class DashboardToolbar(QToolBar):
             self.addAction(self.actions_dict['generate_pdf'])
         self.addSeparator()
         self.addAction(self.actions_dict['logout'])
+        self.addWidget(self.spacer_right)
 
 class DashboardWindow(QMainWindow):
     def __init__(self, db, user):
@@ -541,8 +556,16 @@ class DashboardWindow(QMainWindow):
             }
             QPushButton:hover { background-color: #b8d5ed; color: #1c5ea3; }
         """)
+        # Toolbar centering using a QWidget wrapper
+        toolbar_container = QWidget()
+        toolbar_layout = QHBoxLayout(toolbar_container)
+        toolbar_layout.setContentsMargins(0, 0, 0, 0)
+        toolbar_layout.setSpacing(0)
         self.toolbar = DashboardToolbar(self.user)
+        toolbar_layout.addWidget(self.toolbar)
         self.addToolBar(Qt.TopToolBarArea, self.toolbar)
+        self.setMenuWidget(toolbar_container)
+
         self.toolbar.actions_dict['projects'].triggered.connect(self.show_dashboard)
         self.toolbar.actions_dict['thresholds'].triggered.connect(self.show_thresholds)
         self.toolbar.actions_dict['input_tests'].triggered.connect(self.tests)
