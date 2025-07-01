@@ -11,7 +11,7 @@ et enregistre en base avec l’ID de l’utilisateur courant. :contentReference[
 
 from PyQt5.QtWidgets import (
     QDialog, QLineEdit, QDateEdit, QPushButton,
-    QFormLayout, QVBoxLayout, QHBoxLayout, QMessageBox
+    QFormLayout, QVBoxLayout, QHBoxLayout, QMessageBox, QSizePolicy
 )
 from PyQt5.QtCore import QDate
 
@@ -76,6 +76,10 @@ class ProjectForm(QDialog):
         self.input_date     = QDateEdit(calendarPopup=True)
         self.input_date.setDate(QDate.currentDate())
 
+        # Ajuster la taille des champs pour qu'ils s'étendent avec la fenêtre
+        for widget in [self.input_company, self.input_location, self.input_room, self.input_date]:
+            widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
         # Boutons
         self.btn_save   = QPushButton("Enregistrer")
         self.btn_cancel = QPushButton("Annuler")
@@ -84,6 +88,7 @@ class ProjectForm(QDialog):
 
         # Layouts
         form_layout = QFormLayout()
+        form_layout.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         form_layout.addRow("Entreprise :",    self.input_company)
         form_layout.addRow("Localisation :",  self.input_location)
         form_layout.addRow("Type de salle :", self.input_room)
@@ -97,6 +102,8 @@ class ProjectForm(QDialog):
         main_layout = QVBoxLayout()
         main_layout.addLayout(form_layout)
         main_layout.addLayout(btn_layout)
+        main_layout.setStretch(0, 1)
+        main_layout.setStretch(1, 0)
         self.setLayout(main_layout)
 
     def save_project(self):

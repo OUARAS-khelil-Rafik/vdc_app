@@ -13,7 +13,7 @@ import os
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QVBoxLayout,
-    QHBoxLayout, QMessageBox, QDialog, QHeaderView
+    QHBoxLayout, QMessageBox, QDialog, QHeaderView, QSizePolicy
 )
 from PyQt5.QtCore import Qt
 
@@ -96,8 +96,9 @@ class DashboardWindow(QMainWindow):
         self.table_projects.setSelectionBehavior(self.table_projects.SelectRows)
         self.table_projects.setEditTriggers(self.table_projects.NoEditTriggers)
         self.table_projects.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table_projects.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.table_projects.setSizePolicy(self.table_projects.sizePolicy().horizontalPolicy(), self.table_projects.sizePolicy().verticalPolicy())
+        self.table_projects.verticalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table_projects.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.table_projects.setMinimumHeight(200)
         layout.addWidget(self.table_projects, stretch=1)
 
         # Barre de boutons d’actions
@@ -147,6 +148,18 @@ class DashboardWindow(QMainWindow):
             self.btn_generate_pdf.hide()
         # Administrateur : tout visible
 
+        # Permettre à la table de s'ajuster dynamiquement à la fenêtre
+        self.table_projects.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table_projects.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.table_projects.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.table_projects.setColumnWidth(0, self.table_projects.width() // 4)
+        self.table_projects.setColumnWidth(1, self.table_projects.width() // 4)
+        self.table_projects.setColumnWidth(2, self.table_projects.width() // 4)
+        self.table_projects.setColumnWidth(3, self.table_projects.width() // 4)
+
     def refresh_projects(self):
         """
         Recharge la liste des projets depuis la base SQLite.
@@ -164,6 +177,7 @@ class DashboardWindow(QMainWindow):
             self.table_projects.setItem(i, 2, QTableWidgetItem(row['room_type']))
             self.table_projects.setItem(i, 3, QTableWidgetItem(row['test_date']))
         self.table_projects.resizeColumnsToContents()
+        self.table_projects.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
     def get_selected_project_id(self):
         """
