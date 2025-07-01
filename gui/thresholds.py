@@ -22,8 +22,53 @@ class ThresholdsDialog(QDialog):
         self.db = db
         self.setWindowTitle("Seuils de conformité")
         self.resize(600, 400)
+        self._apply_styles()
         self._init_ui()
         self.refresh_thresholds()
+
+    def _apply_styles(self):
+        # Couleurs : bleu clair #b8d5ed, bleu foncé #1c5ea3, blanc, fond gris
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #e0e0e0;
+            }
+            QTableWidget {
+                background-color: #ffffff;
+                alternate-background-color: #b8d5ed;
+                gridline-color: #1c5ea3;
+                selection-background-color: #b8d5ed;
+                selection-color: #1c5ea3;
+                border: 1px solid #1c5ea3;
+                font-size: 13px;
+            }
+            QHeaderView::section {
+                background-color: #1c5ea3;
+                color: #ffffff;
+                font-weight: bold;
+                border: 1px solid #b8d5ed;
+                padding: 4px;
+            }
+            QLineEdit {
+                background-color: #ffffff;
+                border: 1px solid #1c5ea3;
+                padding: 3px;
+                border-radius: 4px;
+            }
+            QPushButton {
+                background-color: #1c5ea3;
+                color: #ffffff;
+                border-radius: 5px;
+                padding: 6px 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #b8d5ed;
+                color: #1c5ea3;
+            }
+            QMessageBox {
+                background-color: #ffffff;
+            }
+        """)
 
     def _init_ui(self):
         # Formulaire d’ajout
@@ -44,6 +89,7 @@ class ThresholdsDialog(QDialog):
         self.table.setHorizontalHeaderLabels(["ID", "Classe ISO", "Paramètre", "Valeur max"])
         self.table.setEditTriggers(self.table.NoEditTriggers)
         self.table.setSelectionBehavior(self.table.SelectRows)
+        self.table.setAlternatingRowColors(True)
         self.table.hideColumn(0)  # masque la colonne ID
 
         # Bouton suppression

@@ -29,6 +29,54 @@ class DashboardWindow(QMainWindow):
         self.setWindowTitle("VDC Engineering – Tableau de bord")
         self.setMinimumSize(800, 600)
 
+        # Appliquer le style général
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #e0e0e0;
+            }
+            QWidget {
+                background-color: #e0e0e0;
+            }
+            QLabel#welcomeLabel {
+                color: #1c5ea3;
+                font-size: 22px;
+                font-weight: bold;
+                background: #b8d5ed;
+                border-radius: 10px;
+                padding: 12px;
+                margin-bottom: 10px;
+            }
+            QTableWidget {
+                background-color: #ffffff;
+                border: 1px solid #b8d5ed;
+                font-size: 15px;
+                selection-background-color: #b8d5ed;
+                selection-color: #1c5ea3;
+                gridline-color: #b8d5ed;
+            }
+            QHeaderView::section {
+                background-color: #1c5ea3;
+                color: #ffffff;
+                font-weight: bold;
+                border: none;
+                padding: 6px;
+            }
+            QPushButton {
+                background-color: #1c5ea3;
+                color: #ffffff;
+                border-radius: 7px;
+                padding: 8px 18px;
+                font-size: 15px;
+                font-weight: bold;
+                margin: 0 4px;
+            }
+            QPushButton:hover {
+                background-color: #b8d5ed;
+                color: #1c5ea3;
+                border: 1px solid #1c5ea3;
+            }
+        """)
+
         # Widget central
         central = QWidget()
         layout = QVBoxLayout(central)
@@ -36,6 +84,7 @@ class DashboardWindow(QMainWindow):
 
         # Bandeau de bienvenue
         welcome = QLabel(f"Bienvenue {self.user['username']} ({self.user['role']})")
+        welcome.setObjectName("welcomeLabel")
         welcome.setAlignment(Qt.AlignCenter)
         layout.addWidget(welcome)
 

@@ -31,6 +31,44 @@ class ProjectForm(QDialog):
         self.setModal(True)
         self.resize(400, 200)
 
+        # Appliquer le style global
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #f0f0f0;
+            }
+            QLineEdit, QDateEdit {
+                background: #ffffff;
+                border: 1px solid #b8d5ed;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 14px;
+            }
+            QLineEdit:focus, QDateEdit:focus {
+                border: 2px solid #1c5ea3;
+            }
+            QLabel {
+                color: #1c5ea3;
+                font-weight: bold;
+                font-size: 13px;
+            }
+            QPushButton {
+                background-color: #b8d5ed;
+                color: #1c5ea3;
+                border: none;
+                border-radius: 4px;
+                padding: 6px 18px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #1c5ea3;
+                color: #ffffff;
+            }
+            QPushButton:pressed {
+                background-color: #14406e;
+            }
+        """)
+
         # Champs du formulaire
         self.input_company  = QLineEdit()
         self.input_location = QLineEdit()

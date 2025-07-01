@@ -35,6 +35,37 @@ class TestForm(QDialog):
         self.setModal(True)
         self.resize(450, 300)
 
+        # Style général
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #e0e0e0;
+            }
+            QLabel {
+                color: #1c5ea3;
+                font-weight: bold;
+                font-size: 14px;
+            }
+            QLineEdit {
+                background: #ffffff;
+                border: 1px solid #b8d5ed;
+                border-radius: 5px;
+                padding: 4px;
+                font-size: 13px;
+            }
+            QPushButton {
+                background-color: #1c5ea3;
+                color: #ffffff;
+                border-radius: 6px;
+                padding: 6px 18px;
+                font-weight: bold;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #b8d5ed;
+                color: #1c5ea3;
+            }
+        """)
+
         # 1. Récupérer la classe ISO (room_type) du projet
         row = self.db.conn.execute(
             "SELECT room_type FROM projects WHERE id = ?",
