@@ -288,7 +288,7 @@ class DashboardWindow(QMainWindow):
             return
         from pdf.generator import PDFGenerator
         gen = PDFGenerator(self.db)
-        save_path = os.path.join(os.getcwd(), f"rapport_projet_{project_id}.pdf")
+        save_path = os.path.join(os.getcwd(), f"static/pdf_template/rapport_projet_{project_id}.pdf")
         gen.generate_report(project_id, save_path)
         QMessageBox.information(
             self, "PDF généré", f"Rapport enregistré ici : {save_path}", QMessageBox.Ok
