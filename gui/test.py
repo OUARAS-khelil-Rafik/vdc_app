@@ -1,4 +1,3 @@
-import os
 from PyQt5.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QMessageBox, QDialog, QPushButton, QFormLayout, QLineEdit
 )
@@ -32,8 +31,8 @@ class TestForm(QDialog):
             QPushButton:hover { background-color: #b8d5ed; color: #1c5ea3; }
         """)
         row = self.db.conn.execute("SELECT room_type FROM projects WHERE id = ?", (self.project_id,)).fetchone()
-        self.iso_class = row["room_type"]
-        self.thresholds = self.manager.get_thresholds(self.iso_class)
+        self.iso_class = row["room_type"] if row else None
+        self.thresholds = self.manager.get_thresholds(self.iso_class) if self.iso_class else []
         form_layout = QFormLayout()
         self.input_point = QLineEdit()
         form_layout.addRow("Point de mesure :", self.input_point)
@@ -65,13 +64,18 @@ class TestForm(QDialog):
         measurements = []
         for param, (widget, max_val) in self.widgets.items():
             text = widget.text().strip()
+            if not text:
+                QMessageBox.warning(self, "Champs manquant", f"Merci de renseigner la valeur pour « {param} ». ", QMessageBox.Ok)
+                return
             try:
                 value = float(text)
             except ValueError:
                 QMessageBox.warning(self, "Valeur invalide", f"La valeur pour « {param} » n’est pas un nombre valide.", QMessageBox.Ok)
                 return
             measurements.append((param, value, max_val))
-        compliant = self.manager.save_test(self.project_id, self.user["id"], point_name, measurements)
+        # Correction: conformité = toutes les valeurs <= seuil
+        compliant = all(value <= max_val for _, value, max_val in measurements)
+        self.manager.save_test(self.project_id, self.user['id'], point_name, measurements)
         status = "Conforme" if compliant else "Non conforme"
         QMessageBox.information(self, "Test enregistré", f"Le test a bien été enregistré.\nStatut de conformité : {status}", QMessageBox.Ok)
         self.accept()

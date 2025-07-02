@@ -8,6 +8,7 @@ from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor
 from models.projectmanager import ProjectManager
 from models.utils import dict_from_row
+from .test import TestForm
 
 
 class NoFocusTableWidget(QTableWidget):
@@ -266,18 +267,13 @@ class ProjectWidget(QWidget):
         if project_id is None:
             QMessageBox.warning(self, "Aucun projet", "Veuillez sélectionner un projet.", QMessageBox.Ok)
             return
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Saisir un test")
-        layout = QFormLayout(dialog)
-        layout.addRow("Date :", QDateEdit(calendarPopup=True))
-        layout.addRow("Description :", QLineEdit())
-        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
-        layout.addRow(button_box)
-        button_box.accepted.connect(dialog.accept)
-        button_box.rejected.connect(dialog.reject)
-        if dialog.exec_() == QDialog.Accepted:
-            self.manager.add_test(project_id, dialog.input_date.date(), dialog.input_description.text())
-        dialog.exec_()
+        try:
+            dialog = TestForm(self.db, project_id, self.user)
+            if dialog.exec_() == QDialog.Accepted:
+                self.refresh_projects()
+        except ImportError:
+            QMessageBox.critical(self, "Erreur", "Impossible d'importer TestForm depuis gui/test.py.", QMessageBox.Ok)
+            return
 
     def valider_test(self):
         role = self.user['role']
