@@ -17,29 +17,57 @@ class ThresholdsTable(QTableWidget):
         super().__init__(parent)
         self.setColumnCount(len(self.HEADERS))
         self.setHorizontalHeaderLabels(self.HEADERS)
-        self.setEditTriggers(self.NoEditTriggers)
         self.setSelectionBehavior(self.SelectRows)
-        self.setAlternatingRowColors(True)
-        self.hideColumn(0)
+        self.setSelectionMode(self.ExtendedSelection)
+        self.setEditTriggers(self.NoEditTriggers)
         self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setMinimumHeight(200)
         self.verticalHeader().setVisible(False)
+        self.horizontalHeader().setDefaultAlignment(Qt.AlignCenter | Qt.AlignVCenter)
+        self.setStyleSheet("""
+            QTableWidget {
+                background-color: #fff; 
+                alternate-background-color: #b8d5ed;
+                gridline-color: #1c5ea3; 
+                selection-background-color: #b8d5ed;
+                selection-color: #1c5ea3; 
+                border: 2px solid #1c5ea3; 
+                font-size: 15px;
+                border-radius: 8px;
+            }
+            QHeaderView::section {
+                background-color: #1c5ea3; color: #fff; font-weight: bold;
+                border: none; padding: 6px; qproperty-alignment: 'AlignCenter | AlignVCenter';
+            }
+            QTableWidget::item {
+                border-bottom: 1px solid #b8d5ed;
+                border-right: 1px solid #b8d5ed;
+            }
+        """)
 
     def populate(self, rows):
         self.setRowCount(len(rows))
-        for i, r in enumerate(rows):
-            r = dict_from_row(r, self.COLUMNS)
+        for i, row in enumerate(rows):
+            row = dict_from_row(row, self.COLUMNS)
             for col, key in enumerate(self.COLUMNS):
-                self.setItem(i, col, QTableWidgetItem(str(r[key])))
+                item = QTableWidgetItem(str(row[key]))
+                item.setTextAlignment(Qt.AlignCenter)
+                item.setBackground(QColor(Qt.white))
+                if col == 0:
+                    item.setData(Qt.UserRole, row['id'])
+                self.setItem(i, col, item)
         self.resizeColumnsToContents()
+        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.hideColumn(self.COLUMNS.index("id"))
 
     def get_selected_threshold_id(self):
         sel = self.currentRow()
         if sel < 0:
             return None
         item = self.item(sel, 0)
-        return int(item.text()) if item else None
+        return item.data(Qt.UserRole) if item else None
 
 class ThresholdForm(QDialog):
     def __init__(self, db, threshold=None, parent=None):
@@ -206,5 +234,6 @@ class ThresholdsWidget(QWidget):
             try:
                 self.manager.delete_threshold(threshold_id)
                 self.refresh_thresholds()
+                self.table.clearSelection()
             except Exception as e:
                 QMessageBox.critical(self, "Erreur", f"Impossible de supprimer le seuil : {e}", QMessageBox.Ok)
