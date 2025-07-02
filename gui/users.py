@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QTableWidgetItem, QHeaderView, QSizePolicy, QTableWidget,
+    QWidget, QVBoxLayout, QTableWidgetItem, QHeaderView, QSizePolicy, QTableWidget,
     QPushButton, QHBoxLayout, QDialog, QFormLayout, QLineEdit, QComboBox, QMessageBox
 )
 from PyQt5.QtCore import Qt
