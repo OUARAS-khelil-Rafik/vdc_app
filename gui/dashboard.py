@@ -89,10 +89,17 @@ class DashboardWindow(QMainWindow):
         self.addToolBar(Qt.TopToolBarArea, self.toolbar)
         self.setMenuWidget(toolbar_container)
 
+        # Connect actions based on role
         self.toolbar.actions_dict['projects'].triggered.connect(self.show_projects)
-        self.toolbar.actions_dict['users'].triggered.connect(self.show_users)  # Ajouté ici
         self.toolbar.actions_dict['thresholds'].triggered.connect(self.show_thresholds)
         self.toolbar.actions_dict['logout'].triggered.connect(self.logout)
+
+        # Only Administrateur can see and use "Utilisateurs"
+        if self.user.get('role', '').lower() == 'administrateur':
+            self.toolbar.actions_dict['users'].setVisible(True)
+            self.toolbar.actions_dict['users'].triggered.connect(self.show_users)
+        else:
+            self.toolbar.actions_dict['users'].setVisible(False)
 
         self.central = QWidget()
         self.central_layout = QVBoxLayout(self.central)
@@ -108,7 +115,7 @@ class DashboardWindow(QMainWindow):
 
         self.project_widget = ProjectWidget(self.db, self.user)
         self.users_widget = UsersWidget(self.db)
-        self.thresholds_widget = ThresholdsWidget(self.db)
+        self.thresholds_widget = ThresholdsWidget(self.db, self.user)
         self.content_layout.addWidget(self.project_widget)
         self.project_widget.show()
         self.users_widget.hide()

@@ -122,10 +122,12 @@ class ThresholdForm(QDialog):
         }
 
 class ThresholdsWidget(QWidget):
-    def __init__(self, db, parent=None):
+    def __init__(self, db, user, parent=None):
         super().__init__(parent)
         self.db = db
+        self.user = user
         self.manager = ThresholdManager(db)
+
         self.setStyleSheet("""
             QWidget { background-color: #e0e0e0; }
             QTableWidget {
@@ -144,28 +146,40 @@ class ThresholdsWidget(QWidget):
             }
             QPushButton {
                 background-color: #1c5ea3; color: #fff; border-radius: 8px;
-                padding: 8px 24px; font-weight: bold; font-size: 15px;
+                padding: 8px 24px; font-weight: bold; font-size: 14px;
             }
             QPushButton:hover { background-color: #b8d5ed; color: #1c5ea3; }
         """)
+
         self.table = ThresholdsTable()
         self.table.setFocusPolicy(Qt.NoFocus)
+
         self.btn_add = QPushButton("Ajouter Seuil")
         self.btn_edit = QPushButton("Modifier Seuil")
         self.btn_delete = QPushButton("Supprimer Seuil")
+
         self.btn_add.clicked.connect(self.add_threshold)
         self.btn_edit.clicked.connect(self.edit_threshold)
         self.btn_delete.clicked.connect(self.delete_threshold)
+
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
         btn_layout.addWidget(self.btn_add)
         btn_layout.addWidget(self.btn_edit)
         btn_layout.addWidget(self.btn_delete)
         btn_layout.addStretch()
+
         layout = QVBoxLayout()
         layout.addWidget(self.table)
         layout.addLayout(btn_layout)
         self.setLayout(layout)
+
+        # Cacher les boutons pour tous sauf l'Administrateur
+        if self.user['role'] != "Administrateur":
+            self.btn_add.hide()
+            self.btn_edit.hide()
+            self.btn_delete.hide()
+
         self.refresh_thresholds()
 
     def refresh_thresholds(self):
@@ -179,6 +193,10 @@ class ThresholdsWidget(QWidget):
                     item.setTextAlignment(Qt.AlignCenter)
 
     def add_threshold(self):
+        if self.user['role'] != "Administrateur":
+            QMessageBox.warning(self, "Accès refusé", "Seul l’administrateur peut ajouter un seuil.", QMessageBox.Ok)
+            return
+
         dialog = ThresholdForm(self.db)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
@@ -197,14 +215,20 @@ class ThresholdsWidget(QWidget):
                 QMessageBox.critical(self, "Erreur", f"Impossible d’ajouter le seuil : {e}", QMessageBox.Ok)
 
     def edit_threshold(self):
+        if self.user['role'] != "Administrateur":
+            QMessageBox.warning(self, "Accès refusé", "Seul l’administrateur peut modifier un seuil.", QMessageBox.Ok)
+            return
+
         threshold_id = self.table.get_selected_threshold_id()
         if threshold_id is None:
-            QMessageBox.warning(self, "Aucune sélection", "Veuillez sélectionner un seuil à modifier.", QMessageBox.Ok)
+            QMessageBox.warning(self, "Aucun seuil", "Veuillez sélectionner un seuil à modifier.", QMessageBox.Ok)
             return
+
         threshold = self.manager.get_threshold(threshold_id)
         if not threshold:
             QMessageBox.warning(self, "Erreur", "Seuil non trouvé.", QMessageBox.Ok)
             return
+
         dialog = ThresholdForm(self.db, threshold)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
@@ -223,10 +247,15 @@ class ThresholdsWidget(QWidget):
                 QMessageBox.critical(self, "Erreur", f"Impossible de modifier le seuil : {e}", QMessageBox.Ok)
 
     def delete_threshold(self):
+        if self.user['role'] != "Administrateur":
+            QMessageBox.warning(self, "Accès refusé", "Seul l’administrateur peut supprimer un seuil.", QMessageBox.Ok)
+            return
+
         threshold_id = self.table.get_selected_threshold_id()
         if threshold_id is None:
-            QMessageBox.warning(self, "Aucune sélection", "Veuillez sélectionner un seuil à supprimer.", QMessageBox.Ok)
+            QMessageBox.warning(self, "Aucun seuil", "Veuillez sélectionner un seuil à supprimer.", QMessageBox.Ok)
             return
+
         confirm = QMessageBox.question(
             self, "Confirmation", "Supprimer ce seuil définitivement ?", QMessageBox.Yes | QMessageBox.No
         )

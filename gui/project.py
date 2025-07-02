@@ -212,6 +212,14 @@ class ProjectWidget(QWidget):
         layout.addWidget(self.table)
         layout.addLayout(btn_layout)
         self.setLayout(layout)
+        
+        # Masquer les boutons selon le rôle
+        if self.user['role'] in ('Technicien premium', 'Technicien'):
+            self.btn_add.hide()
+            self.btn_edit.hide()
+            self.btn_delete.hide()
+            self.btn_pdf.hide()
+        
         self.refresh_projects()
 
     def refresh_projects(self):
