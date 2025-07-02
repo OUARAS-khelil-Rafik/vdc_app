@@ -18,36 +18,53 @@ from .login import LoginWindow
 from .project import ProjectWidget
 from .thresholds import ThresholdsWidget
 from .users import UsersWidget
+from PyQt5.QtGui import QIcon
 
 class DashboardToolbar(QToolBar):
     def __init__(self, user, parent=None):
         super().__init__("Tableau de bord", parent)
         self.setMovable(False)
+        self.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         self.setStyleSheet("""
             QToolBar {
                 background: transparent;
-                border: none;
+                border: 2px solid #1c5ea3;
+                border-radius: 8px;
                 spacing: 0px;
-                padding: 0px;
+                padding: 4px 8px;
+                margin: 8px 16px;
+                color: #333;
+            }
+            QIcon {
+                width: 50px;
+                height: 50px;
             }
         """)
+        # Remplacez les chemins ci-dessous par les chemins réels de vos icônes
         self.actions_dict = {
-            'projects': QAction("Projets", self),
-            'thresholds': QAction("Seuils", self),
-            'users': QAction("Utilisateurs", self),
-            'logout': QAction("Déconnexion", self)
+            'projects': QAction(QIcon("icons/projects.png"), "Projets", self),
+            'thresholds': QAction(QIcon("icons/thresholds.png"), "Seuils", self),
+            'users': QAction(QIcon("icons/users.png"), "Utilisateurs", self),
+            'logout': QAction(QIcon("icons/logout.png"), "Déconnexion", self)
         }
+        # Inverser l'ordre: texte puis icône
+        for action in self.actions_dict.values():
+            action.setIconText(action.text())
+            action.setText("")  # On met le texte dans IconText pour l'afficher à gauche
+
         self.spacer_left = QWidget()
         self.spacer_left.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.spacer_right = QWidget()
         self.spacer_right.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.addWidget(self.spacer_left)
-        self.addAction(self.actions_dict['projects'])
-        self.addAction(self.actions_dict['thresholds'])
-        self.addAction(self.actions_dict['users'])
+        for key in ['projects', 'thresholds', 'users']:
+            self.addAction(self.actions_dict[key])
         self.addSeparator()
         self.addAction(self.actions_dict['logout'])
         self.addWidget(self.spacer_right)
+        # Pour afficher texte à gauche et icône à droite, il faut un widget personnalisé.
+        # Les QAction ne supportent pas nativement l'inversion.
+        # Pour un affichage parfait, il faudrait remplacer les QAction par des QPushButton personnalisés.
 
 class DashboardWindow(QMainWindow):
     def __init__(self, db, user):
