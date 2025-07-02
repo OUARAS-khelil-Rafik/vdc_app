@@ -33,11 +33,6 @@ class DashboardToolbar(QToolBar):
                 spacing: 0px;
                 padding: 4px 8px;
                 margin: 8px 16px;
-                color: #333;
-            }
-            QIcon {
-                width: 50px;
-                height: 50px;
             }
         """)
         # Remplacez les chemins ci-dessous par les chemins réels de vos icônes
