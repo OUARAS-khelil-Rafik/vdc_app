@@ -5,7 +5,10 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 import sqlite3
-
+class NoFocusTableWidget(QTableWidget):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setFocusPolicy(Qt.NoFocus)
 class UserManager:
     DB_PATH = "data/vdc.db"
 
@@ -14,7 +17,7 @@ class UserManager:
         conn = sqlite3.connect(UserManager.DB_PATH)
         cursor = conn.cursor()
         try:
-            cursor.execute("SELECT id, username, role FROM users")
+            cursor.execute("SELECT id, username, role, validate_user FROM users")
             users = cursor.fetchall()
         except Exception:
             users = []
@@ -69,45 +72,67 @@ class UserManager:
 class UserForm(QDialog):
     def __init__(self, parent=None, user=None):
         super().__init__(parent)
-        self.setWindowTitle("Utilisateur")
         self.user = user
-        self.init_ui()
+        self._init_ui()
 
-    def init_ui(self):
-        layout = QFormLayout(self)
-        self.username_edit = QLineEdit(self)
-        self.role_combo = QComboBox(self)
+    def _init_ui(self):
+        self.setWindowTitle("Modifier utilisateur" if self.user else "Nouvel utilisateur")
+        self.setModal(True)
+        self.resize(350, 150)
+        self.setStyleSheet("""
+            QDialog { background-color: #f0f0f0; }
+            QLineEdit, QDateEdit {
+                background: #fff; border: 1px solid #b8d5ed; border-radius: 4px;
+                padding: 4px 8px; font-size: 14px;
+            }
+            QLineEdit:focus, QDateEdit:focus { border: 2px solid #1c5ea3; }
+            QLabel { background: #f0f0f0; color: #1c5ea3; font-weight: bold; font-size: 13px; }
+            QPushButton {
+                background-color: #b8d5ed; color: #1c5ea3; border: none; border-radius: 4px;
+                padding: 6px 18px; font-size: 14px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: #1c5ea3; color: #fff; }
+            QPushButton:pressed { background-color: #14406e; }
+            QComboBox {
+                background: #fff; border: 1px solid #b8d5ed; border-radius: 4px;
+                padding: 4px 8px; font-size: 14px;
+            }
+            QComboBox:focus { border: 2px solid #1c5ea3; }
+        """)
+        self.username_edit = QLineEdit()
+        self.role_combo = QComboBox()
         self.role_combo.addItems(["Technicien premium", "Technicien"])
-        # Si modification, afficher le rôle existant même si c'est admin
         if self.user:
             self.username_edit.setText(self.user[1])
             if self.user[2] not in ["Technicien premium", "Technicien"]:
                 self.role_combo.addItem(self.user[2])
             self.role_combo.setCurrentText(self.user[2])
-
-        layout.addRow("Nom d'utilisateur:", self.username_edit)
-        layout.addRow("Rôle:", self.role_combo)
-
+        for widget in [self.username_edit, self.role_combo]:
+            widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.btn_save = QPushButton("Modifier" if self.user else "Enregistrer")
+        self.btn_cancel = QPushButton("Annuler")
+        self.btn_save.clicked.connect(self.accept)
+        self.btn_cancel.clicked.connect(self.reject)
+        form_layout = QFormLayout()
+        form_layout.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        form_layout.addRow("Nom d'utilisateur :", self.username_edit)
+        form_layout.addRow("Rôle :", self.role_combo)
         btn_layout = QHBoxLayout()
-        self.save_btn = QPushButton("Enregistrer")
-        self.save_btn.clicked.connect(self.accept)
-        btn_layout.addWidget(self.save_btn)
-        self.cancel_btn = QPushButton("Annuler")
-        self.cancel_btn.clicked.connect(self.reject)
-        btn_layout.addWidget(self.cancel_btn)
-        layout.addRow(btn_layout)
+        btn_layout.addStretch()
+        btn_layout.addWidget(self.btn_save)
+        btn_layout.addWidget(self.btn_cancel)
+        main_layout = QVBoxLayout()
+        main_layout.addLayout(form_layout)
+        main_layout.addLayout(btn_layout)
+        main_layout.setStretch(0, 1)
+        main_layout.setStretch(1, 0)
+        self.setLayout(main_layout)
 
     def get_data(self):
         return self.username_edit.text().strip(), self.role_combo.currentText()
-
-class NoFocusTableWidget(QTableWidget):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.setFocusPolicy(Qt.NoFocus)
-
 class UsersTable(NoFocusTableWidget):
-    HEADERS = ["ID", "Nom d'utilisateur", "Role"]
-    COLUMNS = ["id", "username", "role"]
+    HEADERS = ["ID", "Nom d'utilisateur", "Role", "Validation"]
+    COLUMNS = ["id", "username", "role", "validate_user"]
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -172,25 +197,35 @@ class UsersWidget(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout()
-        self.head_label = QLabel("Utilisateurs")
-        self.head_label.setStyleSheet("font-size: 22px; font-weight: bold; color: #1c5ea3;")
-        layout.addWidget(self.head_label)
-
         self.table = UsersTable()
         layout.addWidget(self.table)
 
+        # Style des boutons comme ProjectWidget
+        btn_style = """
+            QPushButton {
+                background-color: #1c5ea3; color: #fff; border-radius: 8px;
+                padding: 8px 24px; font-weight: bold; font-size: 15px;
+            }
+            QPushButton:hover { background-color: #b8d5ed; color: #1c5ea3; }
+        """
+
         btn_layout = QHBoxLayout()
-        self.add_btn = QPushButton("Ajouter")
+        btn_layout.addStretch()
+        self.add_btn = QPushButton("Ajouter Utilisateur")
+        self.add_btn.setStyleSheet(btn_style)
         self.add_btn.clicked.connect(self.add_user)
         btn_layout.addWidget(self.add_btn)
 
-        self.edit_btn = QPushButton("Modifier")
+        self.edit_btn = QPushButton("Modifier Utilisateur")
+        self.edit_btn.setStyleSheet(btn_style)
         self.edit_btn.clicked.connect(self.edit_user)
         btn_layout.addWidget(self.edit_btn)
 
-        self.del_btn = QPushButton("Supprimer")
+        self.del_btn = QPushButton("Supprimer Utilisateur")
+        self.del_btn.setStyleSheet(btn_style)
         self.del_btn.clicked.connect(self.delete_user)
         btn_layout.addWidget(self.del_btn)
+        btn_layout.addStretch()
 
         layout.addLayout(btn_layout)
         self.setLayout(layout)
