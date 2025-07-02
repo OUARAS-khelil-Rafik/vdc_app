@@ -8,7 +8,7 @@ Gestion de la base SQLite pour le MVP VDC Engineering :
 – Création des tables (users, projects, thresholds, tests, measurements)
 – Authentification des utilisateurs avec rôles
 – Gestion des mots de passe (hachage SHA-256)
-"""  
+"""
 import sqlite3
 import hashlib
 from typing import Optional, Dict, Any
@@ -25,7 +25,7 @@ class Database:
 
     def initialize(self) -> None:
         """
-        Crée les tables nécessaires si elles n'existent pas déjà.
+        Crée (ou recrée) les tables nécessaires pour l'application.
         """
         with self.conn:
             # Utilisateurs
@@ -40,6 +40,7 @@ class Database:
                                  CHECK(validate_user IN ('Validé','Non validé'))
             );
             """)
+
             # Projets
             self.conn.execute("""
             CREATE TABLE IF NOT EXISTS projects (
@@ -52,38 +53,44 @@ class Database:
                 FOREIGN KEY(created_by) REFERENCES users(id)
             );
             """)
-            # Seuils de conformité
+
+            # Seuils : on supprime l'ancienne table et on la recrée
+            self.conn.execute("DROP TABLE IF EXISTS thresholds;")
             self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS thresholds (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                iso_class   TEXT NOT NULL,
-                parameter   TEXT NOT NULL,
-                max_value   REAL NOT NULL
+            CREATE TABLE thresholds (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id   INTEGER NOT NULL,
+                test_name    TEXT    NOT NULL,
+                min_value    REAL,
+                max_value    REAL,
+                FOREIGN KEY(project_id) REFERENCES projects(id)
             );
             """)
+
             # Sessions de tests
             self.conn.execute("""
             CREATE TABLE IF NOT EXISTS tests (
-                id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                project_id      INTEGER NOT NULL,
-                technician_id   INTEGER NOT NULL,
-                measurement_date TEXT NOT NULL,
-                is_validated    INTEGER DEFAULT 0,
-                validated_by    INTEGER,
-                validated_date  TEXT,
-                FOREIGN KEY(project_id) REFERENCES projects(id),
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id       INTEGER NOT NULL,
+                technician_id    INTEGER NOT NULL,
+                measurement_date TEXT    NOT NULL,
+                is_validated     INTEGER DEFAULT 0,
+                validated_by     INTEGER,
+                validated_date   TEXT,
+                FOREIGN KEY(project_id)    REFERENCES projects(id),
                 FOREIGN KEY(technician_id) REFERENCES users(id),
-                FOREIGN KEY(validated_by) REFERENCES users(id)
+                FOREIGN KEY(validated_by)  REFERENCES users(id)
             );
             """)
+
             # Points de mesure
             self.conn.execute("""
             CREATE TABLE IF NOT EXISTS measurements (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 test_id     INTEGER NOT NULL,
-                point_name  TEXT NOT NULL,
-                parameter   TEXT NOT NULL,
-                value       REAL NOT NULL,
+                point_name  TEXT    NOT NULL,
+                parameter   TEXT    NOT NULL,
+                value       REAL    NOT NULL,
                 FOREIGN KEY(test_id) REFERENCES tests(id)
             );
             """)
@@ -94,7 +101,11 @@ class Database:
         """
         return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
-    def create_user(self, username: str, password: str, role: str, validate_user: str = "Non validé") -> int:
+    def create_user(self,
+                    username: str,
+                    password: str,
+                    role: str,
+                    validate_user: str = "Non validé") -> int:
         """
         Crée un nouvel utilisateur et renvoie son ID.
         Lève sqlite3.IntegrityError si le username existe déjà.
@@ -102,19 +113,24 @@ class Database:
         pwd_hash = self._hash_password(password)
         with self.conn:
             cursor = self.conn.execute(
-                "INSERT INTO users (username, password_hash, role, validate_user) VALUES (?, ?, ?, ?)",
+                "INSERT INTO users (username, password_hash, role, validate_user) "
+                "VALUES (?, ?, ?, ?)",
                 (username, pwd_hash, role, validate_user)
             )
         return cursor.lastrowid
 
-    def authenticate_user(self, username: str, password: str) -> Optional[Dict[str, Any]]:
+    def authenticate_user(self,
+                          username: str,
+                          password: str) -> Optional[Dict[str, Any]]:
         """
         Vérifie les identifiants, et renvoie un dict {id, username, role}
         si OK, ou None sinon. Seuls les utilisateurs validés peuvent se connecter.
         """
         pwd_hash = self._hash_password(password)
         cursor = self.conn.execute(
-            "SELECT id, username, role FROM users WHERE username = ? AND password_hash = ? AND validate_user = 'Validé'",
+            "SELECT id, username, role "
+            "FROM users "
+            "WHERE username = ? AND password_hash = ? AND validate_user = 'Validé'",
             (username, pwd_hash)
         )
         row = cursor.fetchone()

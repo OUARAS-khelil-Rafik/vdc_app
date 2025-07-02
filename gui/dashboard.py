@@ -1,3 +1,4 @@
+# gui/dashboard.py
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
@@ -35,22 +36,21 @@ class DashboardToolbar(QToolBar):
                 margin: 8px 16px;
             }
         """)
-        # Remplacez les chemins ci-dessous par les chemins réels de vos icônes
         self.actions_dict = {
             'projects': QAction(QIcon("icons/projects.png"), "Projets", self),
             'thresholds': QAction(QIcon("icons/thresholds.png"), "Seuils", self),
             'users': QAction(QIcon("icons/users.png"), "Utilisateurs", self),
             'logout': QAction(QIcon("icons/logout.png"), "Déconnexion", self)
         }
-        # Inverser l'ordre: texte puis icône
         for action in self.actions_dict.values():
             action.setIconText(action.text())
-            action.setText("")  # On met le texte dans IconText pour l'afficher à gauche
+            action.setText("")
 
         self.spacer_left = QWidget()
         self.spacer_left.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.spacer_right = QWidget()
         self.spacer_right.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
         self.addWidget(self.spacer_left)
         for key in ['projects', 'thresholds', 'users']:
             self.addAction(self.actions_dict[key])
@@ -91,7 +91,11 @@ class DashboardWindow(QMainWindow):
 
         # Connect actions based on role
         self.toolbar.actions_dict['projects'].triggered.connect(self.show_projects)
-        self.toolbar.actions_dict['thresholds'].triggered.connect(self.show_thresholds)
+        if self.user.get('role') in ('Administrateur', 'Technicien premium'):
+            self.toolbar.actions_dict['thresholds'].setVisible(True)
+            self.toolbar.actions_dict['thresholds'].triggered.connect(self.show_thresholds)
+        else:
+            self.toolbar.actions_dict['thresholds'].setVisible(False)
         self.toolbar.actions_dict['logout'].triggered.connect(self.logout)
 
         # Only Administrateur can see and use "Utilisateurs"
@@ -140,9 +144,9 @@ class DashboardWindow(QMainWindow):
         if self.content_layout.indexOf(self.thresholds_widget) == -1:
             self.content_layout.addWidget(self.thresholds_widget)
         self.thresholds_widget.show()
-    
+
     def show_users(self):
-        self.users_widget.refresh_users()  # Assurez-vous que cette méthode existe dans UsersWidget
+        self.users_widget.refresh_users()
         self.project_widget.hide()
         self.users_widget.show()
         self.thresholds_widget.hide()

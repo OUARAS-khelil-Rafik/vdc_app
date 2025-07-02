@@ -1,3 +1,4 @@
+# gui/project.py
 import os
 from PyQt5.QtWidgets import (
     QWidget, QTableWidget, QTableWidgetItem, QVBoxLayout,
@@ -10,11 +11,11 @@ from models.projectmanager import ProjectManager
 from models.utils import dict_from_row
 from .test import TestForm
 
-
 class NoFocusTableWidget(QTableWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setFocusPolicy(Qt.NoFocus)
+
 class ProjectTable(NoFocusTableWidget):
     HEADERS = ["ID", "Entreprise", "Localisation", "Type de salle", "Date de test"]
     COLUMNS = ["id", "company_name", "location", "room_type", "test_date"]
@@ -214,13 +215,21 @@ class ProjectWidget(QWidget):
         layout.addLayout(btn_layout)
         self.setLayout(layout)
         
-        # Masquer les boutons selon le rôle
-        if self.user['role'] in ('Technicien premium', 'Technicien'):
+        # Ajuster la visibilité des boutons selon le rôle
+        role = self.user['role']
+        if role == 'Technicien':
+            self.btn_add.hide()
+            self.btn_edit.hide()
+            self.btn_delete.hide()
+            self.btn_validate.hide()
+            self.btn_pdf.hide()
+        elif role == 'Technicien premium':
             self.btn_add.hide()
             self.btn_edit.hide()
             self.btn_delete.hide()
             self.btn_pdf.hide()
-        
+        # Administrateur conserve tous les boutons
+
         self.refresh_projects()
 
     def refresh_projects(self):

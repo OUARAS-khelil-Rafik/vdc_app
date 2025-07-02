@@ -1,103 +1,87 @@
+# pdf/generator.py
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 """
 pdf/generator.py
 
-Génération automatique du rapport PDF final :
-– Informations du projet
-– Mesures et seuils
-– Statut de conformité
-– Noms technicien / validateur
-– Dates, signatures :contentReference[oaicite:1]{index=1}
+Générateur de rapport PDF pour VDC Engineering, basé sur ReportLab.
+Inclut données projet, mesures, conformité, et signatures.
 """
 
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer
-)
+from reportlab.platypus import SimpleDocTemplate, Table, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib import colors
 
 class PDFGenerator:
     def __init__(self, db):
         self.db = db
 
-    def generate_report(self, project_id: int, file_path: str) -> None:
-        doc = SimpleDocTemplate(file_path, pagesize=A4)
-        styles = getSampleStyleSheet()
-        story = []
+    def _get_username(self, user_id: int) -> str:
+        row = self.db.conn.execute(
+            "SELECT username FROM users WHERE id = ?",
+            (user_id,)
+        ).fetchone()
+        return row["username"] if row else "Inconnu"
 
-        # Projet
+    def generate_report(self, project_id: int, save_path: str) -> None:
+        # 1) Charger les informations du projet
         proj = self.db.conn.execute(
-            "SELECT * FROM projects WHERE id = ?", (project_id,)
+            "SELECT company_name, location, room_type, test_date FROM projects WHERE id = ?",
+            (project_id,)
         ).fetchone()
-        creator = self.db.conn.execute(
-            "SELECT username FROM users WHERE id = ?", (proj["created_by"],)
-        ).fetchone()
+        if not proj:
+            raise ValueError(f"Projet {project_id} introuvable.")
 
-        story.append(Paragraph(f"Rapport de projet #{project_id}", styles["Title"]))
-        story.append(Spacer(1, 12))
-
-        info = [
-            ["Entreprise", proj["company_name"]],
-            ["Localisation", proj["location"]],
-            ["Type de salle", proj["room_type"]],
-            ["Date du test", proj["test_date"]],
-            ["Créé par", creator["username"]],
-        ]
-        tbl_info = Table(info, hAlign="LEFT")
-        tbl_info.setStyle(TableStyle([
-            ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-            ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
-        ]))
-        story.append(tbl_info)
-        story.append(Spacer(1, 12))
-
-        # Tests et mesures
+        # 2) Charger les sessions de test
         tests = self.db.conn.execute(
-            "SELECT * FROM tests WHERE project_id = ?", (project_id,)
+            """SELECT id, technician_id, is_validated, validated_by, validated_date
+               FROM tests WHERE project_id = ?""",
+            (project_id,)
         ).fetchall()
+
+        # 3) Préparer les données pour le tableau
+        data = [["Point", "Paramètre", "Seuil", "Valeur", "Conforme"]]
         for t in tests:
-            tech = self.db.conn.execute(
-                "SELECT username FROM users WHERE id = ?", (t["technician_id"],)
-            ).fetchone()
-            status = "Validé" if t["is_validated"] else "Non validé"
-            story.append(Paragraph(
-                f"Test #{t['id']} – {t['measurement_date']} – Technicien : {tech['username']} – Statut : {status}",
-                styles["Heading3"]
-            ))
-            story.append(Spacer(1, 6))
-
-            data = [["Point", "Paramètre", "Valeur", "Seuil max", "Conformité"]]
             rows = self.db.conn.execute(
-                """
-                SELECT m.point_name, m.parameter, m.value, th.max_value
-                FROM measurements m
-                JOIN thresholds th
-                  ON th.iso_class = ?
-                 AND th.parameter = m.parameter
-                WHERE m.test_id = ?
-                """, (proj["room_type"], t["id"])
+                """SELECT m.point_name, m.parameter, m.value, th.max_value
+                   FROM measurements m
+                   JOIN thresholds th 
+                     ON th.iso_class = ? AND th.parameter = m.parameter
+                   WHERE m.test_id = ?""",
+                (proj["room_type"], t["id"])
             ).fetchall()
+            for m in rows:
+                point, param, val, seuil = m
+                ok = "✓" if val <= seuil else "✗"
+                data.append([point, param, seuil, val, ok])
 
-            for r in rows:
-                compliant = "✓" if r["value"] <= r["max_value"] else "✗"
-                data.append([
-                    r["point_name"],
-                    r["parameter"],
-                    f"{r['value']}",
-                    f"{r['max_value']}",
-                    compliant
-                ])
+        # 4) Générer le PDF
+        doc = SimpleDocTemplate(save_path, pagesize=A4)
+        styles = getSampleStyleSheet()
+        elems = []
 
-            tbl = Table(data, hAlign="LEFT")
-            tbl.setStyle(TableStyle([
-                ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-                ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
-            ]))
-            story.append(tbl)
-            story.append(Spacer(1, 12))
+        # En-tête projet
+        title = f"Projet : {proj['company_name']} – {proj['location']}"
+        subtitle = f"Type de salle : {proj['room_type']} — Date : {proj['test_date']}"
+        elems.append(Paragraph(title, styles['Title']))
+        elems.append(Paragraph(subtitle, styles['Normal']))
+        elems.append(Spacer(1, 12))
 
-        # Génération finale
-        doc.build(story)
+        # Tableau des mesures
+        table = Table(data, hAlign='LEFT')
+        elems.append(table)
+        elems.append(Spacer(1, 24))
+
+        # Signatures
+        # On prend la dernière session pour la signature
+        last = tests[-1] if tests else None
+        if last:
+            tech = self._get_username(last["technician_id"])
+            elems.append(Paragraph(f"Technicien : {tech}", styles['Normal']))
+            if last["is_validated"]:
+                valid = self._get_username(last["validated_by"])
+                elems.append(Paragraph(f"Validé par : {valid} le {last['validated_date']}", styles['Normal']))
+
+        # Sauvegarde
+        doc.build(elems)
