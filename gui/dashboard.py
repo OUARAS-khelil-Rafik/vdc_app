@@ -62,9 +62,6 @@ class DashboardToolbar(QToolBar):
         self.addSeparator()
         self.addAction(self.actions_dict['logout'])
         self.addWidget(self.spacer_right)
-        # Pour afficher texte à gauche et icône à droite, il faut un widget personnalisé.
-        # Les QAction ne supportent pas nativement l'inversion.
-        # Pour un affichage parfait, il faudrait remplacer les QAction par des QPushButton personnalisés.
 
 class DashboardWindow(QMainWindow):
     def __init__(self, db, user):
