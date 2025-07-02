@@ -5,6 +5,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 import sqlite3
+import hashlib
+
 class NoFocusTableWidget(QTableWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -40,11 +42,12 @@ class UserManager:
         return exists
 
     @staticmethod
-    def add_user(username, role):
+    def add_user(username, password, role):
         conn = sqlite3.connect(UserManager.DB_PATH)
         cursor = conn.cursor()
         try:
-            cursor.execute("INSERT INTO users (username, role) VALUES (?, ?)", (username, role))
+            password_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
+            cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)", (username, password_hash, role))
             conn.commit()
         finally:
             conn.close()
@@ -98,8 +101,10 @@ class UserForm(QDialog):
                 padding: 4px 8px; font-size: 14px;
             }
             QComboBox:focus { border: 2px solid #1c5ea3; }
-        """)
+        """)        
         self.username_edit = QLineEdit()
+        self.password_edit = QLineEdit()
+        self.password_edit.setEchoMode(QLineEdit.Password)
         self.role_combo = QComboBox()
         self.role_combo.addItems(["Technicien premium", "Technicien"])
         if self.user:
@@ -116,6 +121,7 @@ class UserForm(QDialog):
         form_layout = QFormLayout()
         form_layout.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         form_layout.addRow("Nom d'utilisateur :", self.username_edit)
+        form_layout.addRow("Mot de passe :", self.password_edit)
         form_layout.addRow("Rôle :", self.role_combo)
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
@@ -129,7 +135,7 @@ class UserForm(QDialog):
         self.setLayout(main_layout)
 
     def get_data(self):
-        return self.username_edit.text().strip(), self.role_combo.currentText()
+        return self.username_edit.text().strip(), self.password_edit.text(), self.role_combo.currentText()
 class UsersTable(NoFocusTableWidget):
     HEADERS = ["ID", "Nom d'utilisateur", "Role", "Validation"]
     COLUMNS = ["id", "username", "role", "validate_user"]
@@ -238,14 +244,14 @@ class UsersWidget(QWidget):
     def add_user(self):
         form = UserForm(self)
         if form.exec_() == QDialog.Accepted:
-            username, role = form.get_data()
-            if not username or not role:
+            username, password, role = form.get_data()
+            if not username or not password or not role:
                 QMessageBox.warning(self, "Erreur", "Veuillez remplir tous les champs.")
                 return
             if UserManager.username_exists(username):
                 QMessageBox.warning(self, "Erreur", "Ce nom d'utilisateur existe déjà.")
                 return
-            UserManager.add_user(username, role)
+            UserManager.add_user(username, password, role)
             self.refresh_users()
 
     def edit_user(self):
@@ -261,7 +267,7 @@ class UsersWidget(QWidget):
         form = UserForm(self, user=(user_id, username, role))
         if form.exec_() == QDialog.Accepted:
             new_username, new_role = form.get_data()
-            if not new_username or not new_role:
+            if not new_role:
                 QMessageBox.warning(self, "Erreur", "Veuillez remplir tous les champs.")
                 return
             if UserManager.username_exists(new_username, exclude_id=user_id):
