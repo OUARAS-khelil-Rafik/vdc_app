@@ -129,6 +129,9 @@ class UserForm(QDialog):
         # Désactiver la validation si Administrateur
         if self.user and self.user[2] == "Administrateur":
             self.validation_combo.setEnabled(False)
+            self.username_edit.setEnabled(False)
+            self.role_combo.setEnabled(False)
+            self.password_edit.setEnabled(False)
         else:
             self.validation_combo.setEnabled(True)
 
@@ -152,6 +155,10 @@ class UserForm(QDialog):
         main_layout.setStretch(0, 1)
         main_layout.setStretch(1, 0)
         self.setLayout(main_layout)
+
+        # Désactiver le bouton "Modifier" si Administrateur
+        if self.user and self.user[2] == "Administrateur":
+            self.btn_save.setEnabled(False)
 
     def get_data(self):
         return (
@@ -301,8 +308,8 @@ class UsersWidget(QWidget):
         username = self.table.item(row, 1).text()
         role = self.table.item(row, 2).text()
         validation = self.table.item(row, 3).text() if self.table.item(row, 3) else "Non validé"
-        if role == "admin":
-            QMessageBox.warning(self, "Erreur", "Impossible de modifier un admin.")
+        if role == "admin" or role == "Administrateur":
+            QMessageBox.warning(self, "Erreur", "Impossible de modifier un administrateur.")
             return
         # Pass all four fields to UserForm
         form = UserForm(self, user=(user_id, username, role, validation))
@@ -327,8 +334,8 @@ class UsersWidget(QWidget):
             return
         row = self.table.currentRow()
         role = self.table.item(row, 2).text()
-        if role == "admin":
-            QMessageBox.warning(self, "Erreur", "Impossible de supprimer un admin.")
+        if role == "admin" or role == "Administrateur":
+            QMessageBox.warning(self, "Erreur", "Impossible de supprimer un administrateur.")
             return
         reply = QMessageBox.question(self, "Confirmation", "Supprimer cet utilisateur ?", QMessageBox.Yes | QMessageBox.No)
         if reply == QMessageBox.Yes:
