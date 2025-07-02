@@ -110,13 +110,29 @@ class LoginWindow(QWidget):
     def _handle_login(self):
         username = self.input_username.text().strip()
         password = self.input_password.text()
+        if not username or not password:
+            QMessageBox.warning(
+                self,
+                "Champs manquants",
+                "Veuillez remplir tous les champs.",
+                QMessageBox.Ok
+            )
+            return
 
         user = self.db.authenticate_user(username, password)
-        if user:
+        self.input_password.clear()
+        if user and user.get("validate_user") != "Validé":
             from gui.dashboard import DashboardWindow
             self.dashboard = DashboardWindow(self.db, user)
             self.dashboard.show()
             self.close()
+        elif user and user.get("validate_user") == "Validé":
+            QMessageBox.warning(
+                self,
+                "Compte non validé",
+                "Votre compte n'est pas encore validé.",
+                QMessageBox.Ok
+            )
         else:
             QMessageBox.warning(
                 self,
@@ -126,7 +142,10 @@ class LoginWindow(QWidget):
             )
 
     def _handle_signup(self):
-        self.signup_window = SignupWindow(self.db)
-        self.signup_window.show()
-        self.signup_window.raise_()
+        if hasattr(self, 'signup_window') and self.signup_window is not None:
+            self.signup_window.raise_()
+            self.signup_window.activateWindow()
+        else:
+            self.signup_window = SignupWindow(self.db)
+            self.signup_window.show()
         self.close()

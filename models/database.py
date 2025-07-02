@@ -35,7 +35,9 @@ class Database:
                 username        TEXT UNIQUE NOT NULL,
                 password_hash   TEXT NOT NULL,
                 role            TEXT NOT NULL
-                                 CHECK(role IN ('Administrateur','Technicien','Technicien premium'))
+                                 CHECK(role IN ('Administrateur','Technicien','Technicien premium')),
+                validate_user   TEXT NOT NULL DEFAULT 'Non validé'
+                                 CHECK(validate_user IN ('Validé','Non validé'))
             );
             """)
             # Projets
@@ -92,7 +94,7 @@ class Database:
         """
         return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
-    def create_user(self, username: str, password: str, role: str) -> int:
+    def create_user(self, username: str, password: str, role: str, validate_user: str = "Non validé") -> int:
         """
         Crée un nouvel utilisateur et renvoie son ID.
         Lève sqlite3.IntegrityError si le username existe déjà.
@@ -100,19 +102,19 @@ class Database:
         pwd_hash = self._hash_password(password)
         with self.conn:
             cursor = self.conn.execute(
-                "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-                (username, pwd_hash, role)
+                "INSERT INTO users (username, password_hash, role, validate_user) VALUES (?, ?, ?, ?)",
+                (username, pwd_hash, role, validate_user)
             )
         return cursor.lastrowid
 
     def authenticate_user(self, username: str, password: str) -> Optional[Dict[str, Any]]:
         """
         Vérifie les identifiants, et renvoie un dict {id, username, role}
-        si OK, ou None sinon.
+        si OK, ou None sinon. Seuls les utilisateurs validés peuvent se connecter.
         """
         pwd_hash = self._hash_password(password)
         cursor = self.conn.execute(
-            "SELECT id, username, role FROM users WHERE username = ? AND password_hash = ?",
+            "SELECT id, username, role FROM users WHERE username = ? AND password_hash = ? AND validate_user = 'Validé'",
             (username, pwd_hash)
         )
         row = cursor.fetchone()

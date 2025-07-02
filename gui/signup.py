@@ -1,5 +1,6 @@
 import sys
 import os
+import re
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QMessageBox, QApplication
@@ -19,6 +20,7 @@ class SignupWindow(QWidget):
         y = (screen_geometry.height() - self.height()) // 2
         self.move(x, y)
         self.db = db
+        self.login_window = None
         self.init_ui()
 
     def init_ui(self):
@@ -49,7 +51,6 @@ class SignupWindow(QWidget):
                 background-color: #14467a;
             }
         """)
-
 
         layout = QVBoxLayout()
         layout.setSpacing(15)
@@ -109,12 +110,21 @@ class SignupWindow(QWidget):
             QMessageBox.warning(self, "Erreur", "Tous les champs sont obligatoires.")
             return
 
+        if not re.match(r"^[A-Za-z0-9_.-]{3,20}$", username):
+            QMessageBox.warning(self, "Erreur", "Le nom d'utilisateur doit contenir uniquement des lettres, chiffres, points, tirets ou underscores (3-20 caractères).")
+            return
+
         if password != confirm:
             QMessageBox.warning(self, "Erreur", "Les mots de passe ne correspondent pas.")
             return
 
         if len(password) < 8:
             QMessageBox.warning(self, "Erreur", "Le mot de passe doit contenir au moins 8 caractères.")
+            return
+
+        # Optionnel : vérification de complexité du mot de passe
+        if not re.search(r"[A-Z]", password) or not re.search(r"[a-z]", password) or not re.search(r"\d", password):
+            QMessageBox.warning(self, "Erreur", "Le mot de passe doit contenir au moins une majuscule, une minuscule et un chiffre.")
             return
 
         try:
@@ -128,7 +138,8 @@ class SignupWindow(QWidget):
                 QMessageBox.warning(self, "Erreur", f"Erreur lors de l'inscription : {e}")
 
     def open_login(self):
-        from gui.login import LoginWindow
-        self.login_window = LoginWindow(self.db)
+        if self.login_window is None:
+            from gui.login import LoginWindow
+            self.login_window = LoginWindow(self.db)
         self.login_window.show()
         self.close()

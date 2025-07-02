@@ -17,6 +17,8 @@ from PyQt5.QtCore import Qt
 from .login import LoginWindow
 from .project import ProjectWidget
 from .thresholds import ThresholdsWidget
+# Ajoutez l'import pour UsersWidget si ce n'est pas déjà fait
+from .users import UsersWidget
 
 class DashboardToolbar(QToolBar):
     def __init__(self, user, parent=None):
@@ -32,6 +34,7 @@ class DashboardToolbar(QToolBar):
         """)
         self.actions_dict = {
             'projects': QAction("Projets", self),
+            'users': QAction("Utilisateurs", self),  # Ajouté ici
             'thresholds': QAction("Seuils", self),
             'logout': QAction("Déconnexion", self)
         }
@@ -41,6 +44,7 @@ class DashboardToolbar(QToolBar):
         self.spacer_right.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.addWidget(self.spacer_left)
         self.addAction(self.actions_dict['projects'])
+        self.addAction(self.actions_dict['users'])  # Ajouté ici
         self.addAction(self.actions_dict['thresholds'])
         self.addSeparator()
         self.addAction(self.actions_dict['logout'])
@@ -78,6 +82,7 @@ class DashboardWindow(QMainWindow):
         self.setMenuWidget(toolbar_container)
 
         self.toolbar.actions_dict['projects'].triggered.connect(self.show_projects)
+        self.toolbar.actions_dict['users'].triggered.connect(self.show_users)  # Ajouté ici
         self.toolbar.actions_dict['thresholds'].triggered.connect(self.show_thresholds)
         self.toolbar.actions_dict['logout'].triggered.connect(self.logout)
 
@@ -94,23 +99,41 @@ class DashboardWindow(QMainWindow):
         self.central_layout.addWidget(self.content_widget)
 
         self.project_widget = ProjectWidget(self.db, self.user)
+        self.users_widget = UsersWidget(self.db)
         self.thresholds_widget = ThresholdsWidget(self.db)
         self.content_layout.addWidget(self.project_widget)
         self.project_widget.show()
+        self.users_widget.hide()
         self.thresholds_widget.hide()
 
     def show_projects(self):
         self.project_widget.refresh_projects()
         self.project_widget.show()
+        self.users_widget.hide()
         self.thresholds_widget.hide()
         if self.content_layout.indexOf(self.project_widget) == -1:
             self.content_layout.addWidget(self.project_widget)
+        if self.content_layout.indexOf(self.users_widget) != -1:
+            self.content_layout.removeWidget(self.users_widget)
+        if self.content_layout.indexOf(self.thresholds_widget) != -1:
+            self.content_layout.removeWidget(self.thresholds_widget)
+
+    def show_users(self):
+        self.users_widget.refresh_users()  # Assurez-vous que cette méthode existe dans UsersWidget
+        self.project_widget.hide()
+        self.users_widget.show()
+        self.thresholds_widget.hide()
+        if self.content_layout.indexOf(self.users_widget) == -1:
+            self.content_layout.addWidget(self.users_widget)
+        if self.content_layout.indexOf(self.project_widget) != -1:
+            self.content_layout.removeWidget(self.project_widget)
         if self.content_layout.indexOf(self.thresholds_widget) != -1:
             self.content_layout.removeWidget(self.thresholds_widget)
 
     def show_thresholds(self):
         self.thresholds_widget.refresh_thresholds()
         self.project_widget.hide()
+        self.users_widget.hide()
         if self.content_layout.indexOf(self.thresholds_widget) == -1:
             self.content_layout.addWidget(self.thresholds_widget)
         self.thresholds_widget.show()
