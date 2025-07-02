@@ -106,14 +106,32 @@ class UserForm(QDialog):
         self.password_edit = QLineEdit()
         self.password_edit.setEchoMode(QLineEdit.Password)
         self.role_combo = QComboBox()
-        self.role_combo.addItems(["Technicien premium", "Technicien"])
+        self.role_combo.addItems(["Technicien premium", "Technicien", "Administrateur"])
         if self.user:
             self.username_edit.setText(self.user[1])
-            if self.user[2] not in ["Technicien premium", "Technicien"]:
+            if self.user[2] not in ["Technicien premium", "Technicien", "Administrateur"]:
                 self.role_combo.addItem(self.user[2])
             self.role_combo.setCurrentText(self.user[2])
         for widget in [self.username_edit, self.role_combo]:
             widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        
+        self.validation_combo = QComboBox()
+        self.validation_combo.addItems(["Non validé", "Validé"])
+        if self.user:
+            # user = (id, username, role, validate_user)
+            if self.user[3] == 1 or self.user[3] == "1" or self.user[3] == "Validé":
+                self.validation_combo.setCurrentText("Validé")
+            else:
+                self.validation_combo.setCurrentText("Non validé")
+        else:
+            self.validation_combo.setCurrentText("Non validé")
+
+        # Désactiver la validation si Administrateur
+        if self.user and self.user[2] == "Administrateur":
+            self.validation_combo.setEnabled(False)
+        else:
+            self.validation_combo.setEnabled(True)
+
         self.btn_save = QPushButton("Modifier" if self.user else "Enregistrer")
         self.btn_cancel = QPushButton("Annuler")
         self.btn_save.clicked.connect(self.accept)
@@ -123,6 +141,7 @@ class UserForm(QDialog):
         form_layout.addRow("Nom d'utilisateur :", self.username_edit)
         form_layout.addRow("Mot de passe :", self.password_edit)
         form_layout.addRow("Rôle :", self.role_combo)
+        form_layout.addRow("Validation :", self.validation_combo)
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
         btn_layout.addWidget(self.btn_save)
@@ -135,7 +154,13 @@ class UserForm(QDialog):
         self.setLayout(main_layout)
 
     def get_data(self):
-        return self.username_edit.text().strip(), self.password_edit.text(), self.role_combo.currentText()
+        return (
+            self.username_edit.text().strip(),
+            self.password_edit.text(),
+            self.role_combo.currentText(),
+            self.validation_combo.currentText()
+        )
+
 class UsersTable(NoFocusTableWidget):
     HEADERS = ["ID", "Nom d'utilisateur", "Role", "Validation"]
     COLUMNS = ["id", "username", "role", "validate_user"]
@@ -244,15 +269,29 @@ class UsersWidget(QWidget):
     def add_user(self):
         form = UserForm(self)
         if form.exec_() == QDialog.Accepted:
-            username, password, role = form.get_data()
+            username, password, role, validation = form.get_data()
             if not username or not password or not role:
                 QMessageBox.warning(self, "Erreur", "Veuillez remplir tous les champs.")
                 return
             if UserManager.username_exists(username):
                 QMessageBox.warning(self, "Erreur", "Ce nom d'utilisateur existe déjà.")
                 return
+            # Ajout de l'utilisateur avec validation
+            validate_user = "Validé" if validation == "Validé" else "Non validé"
             UserManager.add_user(username, password, role)
+            # Mettre à jour la validation si nécessaire
+            if role != "Administrateur":
+                self._set_user_validation(username, validate_user)
             self.refresh_users()
+
+    def _set_user_validation(self, username, validate_user):
+        conn = sqlite3.connect(UserManager.DB_PATH)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("UPDATE users SET validate_user=? WHERE username=?", (validate_user, username))
+            conn.commit()
+        finally:
+            conn.close()
 
     def edit_user(self):
         user_id = self.table.get_selected_user_id()
@@ -261,12 +300,14 @@ class UsersWidget(QWidget):
         row = self.table.currentRow()
         username = self.table.item(row, 1).text()
         role = self.table.item(row, 2).text()
+        validation = self.table.item(row, 3).text() if self.table.item(row, 3) else "Non validé"
         if role == "admin":
             QMessageBox.warning(self, "Erreur", "Impossible de modifier un admin.")
             return
-        form = UserForm(self, user=(user_id, username, role))
+        # Pass all four fields to UserForm
+        form = UserForm(self, user=(user_id, username, role, validation))
         if form.exec_() == QDialog.Accepted:
-            new_username, new_role = form.get_data()
+            new_username, new_password, new_role, new_validation = form.get_data()
             if not new_role:
                 QMessageBox.warning(self, "Erreur", "Veuillez remplir tous les champs.")
                 return
@@ -274,6 +315,10 @@ class UsersWidget(QWidget):
                 QMessageBox.warning(self, "Erreur", "Ce nom d'utilisateur existe déjà.")
                 return
             UserManager.update_user(user_id, new_username, new_role)
+            # Mettre à jour la validation si ce n'est pas un administrateur
+            if new_role != "Administrateur":
+                validate_user = "Validé" if new_validation == "Validé" else "Non validé"
+                self._set_user_validation(new_username, validate_user)
             self.refresh_users()
 
     def delete_user(self):
