@@ -22,10 +22,30 @@ ISO_THRESHOLDS = {
     "ISO 9": {"Particules >0.5 µm": 8320000, "Particules >5 µm": 293000,"Température": 22, "Humidité relative": 50},
 }
 
+from PyQt5.QtWidgets import QWidget, QPushButton, QComboBox, QHBoxLayout
+from PyQt5.QtCore import Qt
+
 class IsoChoiceWidget(QWidget):
-    def __init__(self, combo, parent=None):
+    def __init__(self, combo: QComboBox, parent=None):
         super().__init__(parent)
+        self.setObjectName("IsoChoiceWidget")
+
         self.combo = combo
+        self.combo.setObjectName("isoCombo")
+        self.combo.setVisible(False)
+        self.combo.setEditable(False)
+        self.combo.setInsertPolicy(QComboBox.NoInsert)
+
+        self.btn = QPushButton(self)
+        self.btn.setObjectName("isoBtn")
+        self.btn.setCursor(Qt.PointingHandCursor)
+        self.btn.setText(f"{self.combo.currentText()}  ▲")
+
+        # Signaux
+        self.btn.clicked.connect(self.show_combo_popup)
+        self.combo.currentTextChanged.connect(self.update_text)
+
+        # Style
         self.setStyleSheet("""
             QWidget#IsoChoiceWidget {
                 background: transparent;
@@ -43,7 +63,6 @@ class IsoChoiceWidget(QWidget):
             QPushButton#isoBtn:hover {
                 background-color: #b8d5ed;
                 color: #1c5ea3;
-                border: 2px solid #1c5ea3;
             }
             QComboBox#isoCombo {
                 background-color: #1c5ea3;
@@ -68,37 +87,37 @@ class IsoChoiceWidget(QWidget):
                 font-size: 14px;
             }
         """)
-        self.setObjectName("IsoChoiceWidget")
-        self.btn = QPushButton(self)
-        self.btn.setObjectName("isoBtn")
-        self.btn.setCursor(Qt.PointingHandCursor)
-        self.btn.setText(f"{self.combo.currentText()}  ▼")
-        self.btn.clicked.connect(self.show_combo_popup)
-        self.combo.currentTextChanged.connect(self.update_text)
-        self.combo.setVisible(False)
 
-        layout = QHBoxLayout()
+        # Layout
+        layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(self.btn)
         layout.addWidget(self.combo)
         layout.addStretch()
-        self.setLayout(layout)
 
         self.update_button_size()
 
-    def update_text(self):
-        self.btn.setText(f"{self.combo.currentText()}  ▼")
+    def update_text(self, text):
+        self.btn.setText(f"{text}  ▲")
         self.update_button_size()
 
     def update_button_size(self):
         font_metrics = self.btn.fontMetrics()
-        text = self.btn.text()
-
+        width = font_metrics.horizontalAdvance(self.btn.text()) + 40
+        self.btn.setMinimumWidth(width)
 
     def show_combo_popup(self):
+        self.combo.setFixedWidth(self.btn.width())
+        
+        # Force the popup to open below the button
+        popup = self.combo.view().window()
+        pos = self.combo.mapToGlobal(self.combo.rect().bottomLeft())
+        popup.move(pos)  # Move popup below combo
         self.combo.showPopup()
         self.combo.setFocus()
+
+
 
 class ThresholdsTable(QTableWidget):
     # Change headers: "Test" (au lieu de "Seuil"), et "Seuil" (au lieu de "Min"/"Max")
