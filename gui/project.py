@@ -16,8 +16,14 @@ class NoFocusTableWidget(QTableWidget):
         self.setFocusPolicy(Qt.NoFocus)
 
 class ProjectTable(NoFocusTableWidget):
-    HEADERS = ["ID", "Entreprise", "Localisation", "Type de salle", "Date de test"]
-    COLUMNS = ["id", "company_name", "location", "room_type", "test_date"]
+    HEADERS = [
+        "ID", "Entreprise", "Localisation", "Type de salle", "Date de test",
+        "Classe ISO", "Statut validation"
+    ]
+    COLUMNS = [
+        "id", "company_name", "location", "room_type", "test_date",
+        "iso_class", "validation_status"
+    ]
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -58,7 +64,7 @@ class ProjectTable(NoFocusTableWidget):
         for i, row in enumerate(rows):
             row = dict_from_row(row, self.COLUMNS)
             for col, key in enumerate(self.COLUMNS):
-                item = QTableWidgetItem(str(row[key]))
+                item = QTableWidgetItem(str(row.get(key, "")))
                 item.setTextAlignment(Qt.AlignCenter)
                 item.setBackground(QColor(Qt.white))
                 if col == 0:
@@ -75,6 +81,9 @@ class ProjectTable(NoFocusTableWidget):
         return item.data(Qt.UserRole) if item else None
 
 class ProjectForm(QDialog):
+    ISO_CLASSES = [f"ISO {i}" for i in range(1, 10)]
+    VALIDATION_STATUSES = ["En attente", "Validé"]
+
     def __init__(self, db, user, project=None):
         super().__init__()
         self.db = db
@@ -90,14 +99,14 @@ class ProjectForm(QDialog):
     def _init_ui(self):
         self.setWindowTitle("Modifier projet" if self.project else "Nouveau projet")
         self.setModal(True)
-        self.resize(400, 200)
+        self.resize(400, 250)
         self.setStyleSheet("""
             QDialog { background-color: #f0f0f0; }
-            QLineEdit, QDateEdit {
+            QLineEdit, QDateEdit, QComboBox {
                 background: #fff; border: 1px solid #b8d5ed; border-radius: 4px;
                 padding: 4px 8px; font-size: 14px;
             }
-            QLineEdit:focus, QDateEdit:focus { border: 2px solid #1c5ea3; }
+            QLineEdit:focus, QDateEdit:focus, QComboBox:focus { border: 2px solid #1c5ea3; }
             QLabel { color: #1c5ea3; font-weight: bold; font-size: 13px; }
             QPushButton {
                 background-color: #b8d5ed; color: #1c5ea3; border: none; border-radius: 4px;
@@ -106,11 +115,18 @@ class ProjectForm(QDialog):
             QPushButton:hover { background-color: #1c5ea3; color: #fff; }
             QPushButton:pressed { background-color: #14406e; }
         """)
+        from PyQt5.QtWidgets import QComboBox
+
         self.input_company  = QLineEdit()
         self.input_location = QLineEdit()
         self.input_room     = QLineEdit()
         self.input_date     = QDateEdit(calendarPopup=True)
         self.input_date.setDate(QDate.currentDate())
+        self.input_iso      = QComboBox()
+        self.input_iso.addItems(self.ISO_CLASSES)
+        self.input_status   = QComboBox()
+        self.input_status.addItems(self.VALIDATION_STATUSES)
+
         if self.project:
             self.input_company.setText(self.project.get("company_name", ""))
             self.input_location.setText(self.project.get("location", ""))
@@ -118,7 +134,18 @@ class ProjectForm(QDialog):
             date = QDate.fromString(self.project.get("test_date", ""), "yyyy-MM-dd")
             if date.isValid():
                 self.input_date.setDate(date)
-        for widget in [self.input_company, self.input_location, self.input_room, self.input_date]:
+            iso_class = self.project.get("iso_class", "ISO 5")
+            idx_iso = self.input_iso.findText(iso_class)
+            if idx_iso >= 0:
+                self.input_iso.setCurrentIndex(idx_iso)
+            status = self.project.get("validation_status", "En attente")
+            idx_status = self.input_status.findText(status)
+            if idx_status >= 0:
+                self.input_status.setCurrentIndex(idx_status)
+        for widget in [
+            self.input_company, self.input_location, self.input_room,
+            self.input_date, self.input_iso, self.input_status
+        ]:
             widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.btn_save   = QPushButton("Modifier" if self.project else "Enregistrer")
         self.btn_cancel = QPushButton("Annuler")
@@ -130,6 +157,8 @@ class ProjectForm(QDialog):
         form_layout.addRow("Localisation :",  self.input_location)
         form_layout.addRow("Type de salle :", self.input_room)
         form_layout.addRow("Date du test :",  self.input_date)
+        form_layout.addRow("Classe ISO :",    self.input_iso)
+        form_layout.addRow("Statut validation :", self.input_status)
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
         btn_layout.addWidget(self.btn_save)
@@ -146,14 +175,20 @@ class ProjectForm(QDialog):
         location = self.input_location.text().strip()
         room     = self.input_room.text().strip()
         date     = self.input_date.date().toString("yyyy-MM-dd")
-        if not company or not date:
-            QMessageBox.warning(self, "Champs manquants", "Le nom de l'entreprise et la date sont obligatoires.", QMessageBox.Ok)
+        iso_class = self.input_iso.currentText()
+        validation_status = self.input_status.currentText()
+        if not company or not date or not iso_class or not validation_status:
+            QMessageBox.warning(self, "Champs manquants", "Le nom de l'entreprise, la date, la classe ISO et le statut sont obligatoires.", QMessageBox.Ok)
             return
         try:
             if self.project:
-                self.manager.update_project(self.project["id"], company, location, room, date)
+                self.manager.update_project(
+                    self.project["id"], company, location, room, date, iso_class, validation_status
+                )
             else:
-                self.manager.add_project(company, location, room, date, self.user['id'])
+                self.manager.add_project(
+                    company, location, room, date, self.user['id'], iso_class, validation_status
+                )
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Erreur", f"Impossible de {'modifier' if self.project else 'créer'} le projet : {e}", QMessageBox.Ok)
@@ -214,7 +249,6 @@ class ProjectWidget(QWidget):
             self.btn_add.hide()
             self.btn_edit.hide()
             self.btn_delete.hide()
-            self.btn_validate.hide()
             self.btn_pdf.hide()
         elif role == 'Technicien premium':
             self.btn_add.hide()

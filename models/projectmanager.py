@@ -6,22 +6,22 @@ class ProjectManager:
 
     def get_projects(self):
         rows = self.db.conn.execute(
-            "SELECT id, company_name, location, room_type, test_date FROM projects"
+            "SELECT id, company_name, location, room_type, test_date, iso_class, validation_status FROM projects"
         ).fetchall()
-        columns = ["id", "company_name", "location", "room_type", "test_date"]
+        columns = ["id", "company_name", "location", "room_type", "test_date", "iso_class", "validation_status"]
         return [dict_from_row(row, columns) for row in rows]
 
-    def add_project(self, company, location, room, date, user_id):
+    def add_project(self, company, location, room, date, user_id, iso_class, validation_status):
         self.db.conn.execute(
-            "INSERT INTO projects (company_name, location, room_type, test_date, created_by) VALUES (?, ?, ?, ?, ?)",
-            (company, location, room, date, user_id)
+            "INSERT INTO projects (company_name, location, room_type, test_date, created_by, iso_class, validation_status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (company, location, room, date, user_id, iso_class, validation_status)
         )
         self.db.conn.commit()
 
-    def update_project(self, project_id, company, location, room, date):
+    def update_project(self, project_id, company, location, room, date, iso_class, validation_status):
         self.db.conn.execute(
-            "UPDATE projects SET company_name=?, location=?, room_type=?, test_date=? WHERE id=?",
-            (company, location, room, date, project_id)
+            "UPDATE projects SET company_name=?, location=?, room_type=?, test_date=?, iso_class=?, validation_status=? WHERE id=?",
+            (company, location, room, date, iso_class, validation_status, project_id)
         )
         self.db.conn.commit()
 
