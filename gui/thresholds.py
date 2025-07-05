@@ -9,17 +9,107 @@ from PyQt5.QtGui import QColor
 
 from models.thresholdmanager import ThresholdManager
 
-class ThresholdsTable(QTableWidget):
-    HEADERS = ["ID", "Projet", "Test", "Min", "Max"]
-    COLUMNS = ["id", "project_id", "test_name", "min_value", "max_value"]
+# Seuils ISO 14644-1 prédéfinis (µm/m³ pour particules, °C et %)
+ISO_THRESHOLDS = {
+    "ISO 1": {"Particules >0.5 µm": 10,      "Particules >5 µm": 0,     "Température": 22, "Humidité relative": 50},
+    "ISO 2": {"Particules >0.5 µm": 100,     "Particules >5 µm": 0,     "Température": 22, "Humidité relative": 50},
+    "ISO 3": {"Particules >0.5 µm": 1000,    "Particules >5 µm": 0,     "Température": 22, "Humidité relative": 50},
+    "ISO 4": {"Particules >0.5 µm": 10000,   "Particules >5 µm": 0,     "Température": 22, "Humidité relative": 50},
+    "ISO 5": {"Particules >0.5 µm": 100000,  "Particules >5 µm": 0,     "Température": 22, "Humidité relative": 50},
+    "ISO 6": {"Particules >0.5 µm": 1000000, "Particules >5 µm": 0,     "Température": 22, "Humidité relative": 50},
+    "ISO 7": {"Particules >0.5 µm": 352000,  "Particules >5 µm": 2900,  "Température": 22, "Humidité relative": 50},
+    "ISO 8": {"Particules >0.5 µm": 832000,  "Particules >5 µm": 29300, "Température": 22, "Humidité relative": 50},
+    "ISO 9": {"Particules >0.5 µm": 8320000, "Particules >5 µm": 293000,"Température": 22, "Humidité relative": 50},
+}
 
-    def __init__(self, db, parent=None):
+class IsoChoiceWidget(QWidget):
+    def __init__(self, combo, parent=None):
         super().__init__(parent)
-        self.db = db
+        self.combo = combo
+        self.setStyleSheet("""
+            QWidget#IsoChoiceWidget {
+                background: transparent;
+            }
+            QPushButton#isoBtn {
+                background-color: #1c5ea3;
+                color: #fff;
+                border-radius: 8px;
+                padding: 8px 32px 8px 24px;
+                font-weight: bold;
+                font-size: 14px;
+                border: 2px solid #1c5ea3;
+                text-align: left;
+            }
+            QPushButton#isoBtn:hover {
+                background-color: #b8d5ed;
+                color: #1c5ea3;
+                border: 2px solid #1c5ea3;
+            }
+            QComboBox#isoCombo {
+                background-color: #1c5ea3;
+                color: #fff;
+                border-radius: 8px;
+                padding: 8px 32px 8px 24px;
+                font-weight: bold;
+                font-size: 14px;
+                border: none;
+            }
+            QComboBox#isoCombo::drop-down {
+                border: none;
+                background: transparent;
+                width: 0px;
+            }
+            QComboBox#isoCombo QAbstractItemView {
+                background: #fff;
+                color: #1c5ea3;
+                selection-background-color: #b8d5ed;
+                selection-color: #1c5ea3;
+                border-radius: 8px;
+                font-size: 14px;
+            }
+        """)
+        self.setObjectName("IsoChoiceWidget")
+        self.btn = QPushButton(self)
+        self.btn.setObjectName("isoBtn")
+        self.btn.setCursor(Qt.PointingHandCursor)
+        self.btn.setText(f"{self.combo.currentText()}  ▼")
+        self.btn.clicked.connect(self.show_combo_popup)
+        self.combo.currentTextChanged.connect(self.update_text)
+        self.combo.setVisible(False)
+
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self.btn)
+        layout.addWidget(self.combo)
+        layout.addStretch()
+        self.setLayout(layout)
+
+        self.update_button_size()
+
+    def update_text(self):
+        self.btn.setText(f"{self.combo.currentText()}  ▼")
+        self.update_button_size()
+
+    def update_button_size(self):
+        font_metrics = self.btn.fontMetrics()
+        text = self.btn.text()
+
+
+    def show_combo_popup(self):
+        self.combo.showPopup()
+        self.combo.setFocus()
+
+class ThresholdsTable(QTableWidget):
+    # Change headers: "Test" (au lieu de "Seuil"), et "Seuil" (au lieu de "Min"/"Max")
+    HEADERS = ["Test", "Seuil"]
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
         self.setColumnCount(len(self.HEADERS))
         self.setHorizontalHeaderLabels(self.HEADERS)
         self.setSelectionBehavior(self.SelectRows)
-        self.setSelectionMode(self.ExtendedSelection)
+        self.setSelectionMode(self.SingleSelection)
         self.setEditTriggers(self.NoEditTriggers)
         self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
@@ -48,35 +138,245 @@ class ThresholdsTable(QTableWidget):
             }
         """)
 
-    def populate(self, rows):
-        self.setRowCount(len(rows))
-        for i, row in enumerate(rows):
-            for col, key in enumerate(self.COLUMNS):
-                if key == "project_id":
-                    pid = row.get("project_id")
-                    proj = self.db.conn.execute(
-                        "SELECT company_name FROM projects WHERE id = ?",
-                        (pid,)
-                    ).fetchone()
-                    text = proj["company_name"] if proj else str(pid)
-                else:
-                    text = str(row.get(key, ""))
-                item = QTableWidgetItem(text)
-                item.setTextAlignment(Qt.AlignCenter)
-                item.setBackground(QColor(Qt.white))
-                if col == 0:
-                    item.setData(Qt.UserRole, row.get("id"))
-                self.setItem(i, col, item)
-        # masquer la colonne ID
-        self.hideColumn(0)
-        self.resizeColumnsToContents()
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+    def populate_iso(self, iso_name):
+        self.setRowCount(0)
+        if iso_name not in ISO_THRESHOLDS:
+            return
+        iso_data = ISO_THRESHOLDS[iso_name]
+        for seuil, valeur in iso_data.items():
+            row = self.rowCount()
+            self.insertRow(row)
+            self.setItem(row, 0, QTableWidgetItem(seuil))  # "Test"
+            self.setItem(row, 1, QTableWidgetItem(str(valeur)))  # "Seuil"
 
-    def get_selected_threshold_id(self):
+    def populate_custom(self, rows):
+        self.setRowCount(0)
+        for row in rows:
+            idx = self.rowCount()
+            self.insertRow(idx)
+            self.setItem(idx, 0, QTableWidgetItem(row.get("test_name", "")))
+            min_val = row.get("min_value")
+            max_val = row.get("max_value")
+            if min_val is not None and max_val is not None:
+                seuil_str = f"{min_val} - {max_val}"
+            elif min_val is not None:
+                seuil_str = f">= {min_val}"
+            elif max_val is not None:
+                seuil_str = f"<= {max_val}"
+            else:
+                seuil_str = ""
+            self.setItem(idx, 1, QTableWidgetItem(seuil_str))
+
+    def get_selected_test_name(self):
         sel = self.currentRow()
         if sel < 0:
             return None
-        return self.item(sel, 0).data(Qt.UserRole)
+        item = self.item(sel, 0)
+        return item.text() if item else None
+
+class ThresholdsWidget(QWidget):
+    def __init__(self, db, user, parent=None):
+        super().__init__(parent)
+        self.db = db
+        self.user = user
+        self.manager = ThresholdManager(db)
+        self.selected_iso = "ISO 1"
+        self.showing_iso = True
+
+        self.setStyleSheet("""
+            QWidget { background-color: #e0e0e0; }
+            QPushButton {
+                background-color: #1c5ea3; color: #fff; border-radius: 8px;
+                padding: 8px 24px; font-weight: bold; font-size: 14px;
+            }
+            QPushButton:hover { background-color: #b8d5ed; color: #1c5ea3; }
+            QComboBox#isoCombo {
+                background-color: #1c5ea3;
+                color: #fff;
+                border-radius: 8px;
+                padding: 8px 24px;
+                font-weight: bold;
+                font-size: 14px;
+                border: none;
+                min-width: 180px;
+            }
+            QComboBox#isoCombo::drop-down {
+                border: none;
+                background: transparent;
+            }
+            QComboBox#isoCombo QAbstractItemView {
+                background: #fff;
+                color: #1c5ea3;
+                selection-background-color: #b8d5ed;
+                selection-color: #1c5ea3;
+                border-radius: 8px;
+                font-size: 14px;
+            }
+        """)
+
+        self.table = ThresholdsTable()
+        self.table.setFocusPolicy(Qt.NoFocus)
+
+        self.iso_combo = QComboBox()
+        self.iso_combo.setObjectName("isoCombo")
+        self.iso_combo.addItems(list(ISO_THRESHOLDS.keys()))
+        self.iso_combo.setCurrentText(self.selected_iso)
+        self.iso_combo.currentTextChanged.connect(self.on_iso_changed)
+        self.iso_combo.setVisible(False)  # Hidden, used by IsoChoiceWidget
+
+        self.iso_choice = IsoChoiceWidget(self.iso_combo)
+        # self.iso_combo.currentTextChanged.connect(self.iso_choice.update_text) # Already connected in IsoChoiceWidget
+
+        self.btn_add = QPushButton("Ajouter Seuil")
+        self.btn_edit = QPushButton("Modifier Seuil")
+        self.btn_delete = QPushButton("Supprimer Seuil")
+
+        self.btn_add.clicked.connect(self.add_threshold)
+        self.btn_edit.clicked.connect(self.edit_threshold)
+        self.btn_delete.clicked.connect(self.delete_threshold)
+
+        # Place iso_choice above, buttons below
+        top_layout = QHBoxLayout()
+        top_layout.addWidget(self.iso_choice)
+        top_layout.addStretch()
+
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        btn_layout.addWidget(self.btn_add)
+        btn_layout.addWidget(self.btn_edit)
+        btn_layout.addWidget(self.btn_delete)
+        btn_layout.addStretch()
+
+        layout = QVBoxLayout()
+        layout.addLayout(top_layout)
+        layout.addWidget(self.table)
+        layout.addLayout(btn_layout)
+        self.setLayout(layout)
+
+        # Seuls Administrateur et Technicien premium
+        if self.user['role'] not in ("Administrateur", "Technicien premium"):
+            self.btn_add.hide()
+            self.btn_edit.hide()
+            self.btn_delete.hide()
+
+        self.show_iso_thresholds()
+
+    def on_iso_changed(self, iso_name):
+        self.selected_iso = iso_name
+        self.showing_iso = True
+        self.show_iso_thresholds()
+
+    def show_iso_thresholds(self):
+        self.showing_iso = True
+        self.table.populate_iso(self.selected_iso)
+
+    def show_custom_thresholds(self):
+        self.showing_iso = False
+        rows = self.manager.get_thresholds()
+        self.table.populate_custom(rows)
+
+    def add_threshold(self):
+        if self.user['role'] not in ("Administrateur", "Technicien premium"):
+            QMessageBox.warning(self, "Accès refusé", "Vous n'avez pas accès à cette fonctionnalité.", QMessageBox.Ok)
+            return
+
+        dialog = ThresholdForm(self.db)
+        if dialog.exec_() == QDialog.Accepted:
+            data = dialog.get_data()
+            if not data["test_name"]:
+                QMessageBox.warning(self, "Champs manquants", "Nom du test obligatoire.", QMessageBox.Ok)
+                return
+            if data["min_value"] == "" and data["max_value"] == "":
+                QMessageBox.warning(self, "Champs manquants", "Au moins une valeur min ou max doit être renseignée.", QMessageBox.Ok)
+                return
+            try:
+                min_val = float(data["min_value"]) if data["min_value"] else None
+                max_val = float(data["max_value"]) if data["max_value"] else None
+            except ValueError:
+                QMessageBox.warning(self, "Valeur incorrecte", "Les valeurs min/max doivent être des nombres.", QMessageBox.Ok)
+                return
+            try:
+                self.manager.add_threshold(None, data["test_name"], min_val, max_val)
+                self.show_custom_thresholds()
+            except Exception as e:
+                QMessageBox.critical(self, "Erreur", f"Impossible d’ajouter le seuil : {e}", QMessageBox.Ok)
+
+    def edit_threshold(self):
+        if self.user['role'] not in ("Administrateur", "Technicien premium"):
+            QMessageBox.warning(self, "Accès refusé", "Vous n'avez pas accès à cette fonctionnalité.", QMessageBox.Ok)
+            return
+
+        if self.showing_iso:
+            QMessageBox.warning(self, "Non modifiable", "Les seuils ISO par défaut ne peuvent pas être modifiés.", QMessageBox.Ok)
+            return
+
+        test_name = self.table.get_selected_test_name()
+        if not test_name:
+            QMessageBox.warning(self, "Aucun seuil", "Veuillez sélectionner un seuil à modifier.", QMessageBox.Ok)
+            return
+
+        rows = self.manager.get_thresholds()
+        thresh = next((r for r in rows if r.get("test_name") == test_name), None)
+        if not thresh:
+            QMessageBox.warning(self, "Erreur", "Seuil non trouvé.", QMessageBox.Ok)
+            return
+
+        dialog = ThresholdForm(self.db, thresh)
+        if dialog.exec_() == QDialog.Accepted:
+            data = dialog.get_data()
+            if not data["test_name"]:
+                QMessageBox.warning(self, "Champs manquants", "Nom du test obligatoire.", QMessageBox.Ok)
+                return
+            if data["min_value"] == "" and data["max_value"] == "":
+                QMessageBox.warning(self, "Champs manquants", "Au moins une valeur min ou max doit être renseignée.", QMessageBox.Ok)
+                return
+            try:
+                min_val = float(data["min_value"]) if data["min_value"] else None
+                max_val = float(data["max_value"]) if data["max_value"] else None
+            except ValueError:
+                QMessageBox.warning(self, "Valeur incorrecte", "Les valeurs min/max doivent être des nombres.", QMessageBox.Ok)
+                return
+            try:
+                self.manager.update_threshold(thresh["id"], None, data["test_name"], min_val, max_val)
+                self.show_custom_thresholds()
+            except Exception as e:
+                QMessageBox.critical(self, "Erreur", f"Impossible de modifier le seuil : {e}", QMessageBox.Ok)
+
+    def delete_threshold(self):
+        if self.user['role'] not in ("Administrateur", "Technicien premium"):
+            QMessageBox.warning(self, "Accès refusé", "Vous n'avez pas accès à cette fonctionnalité.", QMessageBox.Ok)
+            return
+
+        if self.showing_iso:
+            QMessageBox.warning(self, "Non modifiable", "Les seuils ISO par défaut ne peuvent pas être supprimés.", QMessageBox.Ok)
+            return
+
+        test_name = self.table.get_selected_test_name()
+        if not test_name:
+            QMessageBox.warning(self, "Aucun seuil", "Veuillez sélectionner un seuil à supprimer.", QMessageBox.Ok)
+            return
+
+        rows = self.manager.get_thresholds()
+        thresh = next((r for r in rows if r.get("test_name") == test_name), None)
+        if not thresh:
+            QMessageBox.warning(self, "Erreur", "Seuil non trouvé.", QMessageBox.Ok)
+            return
+
+        confirm = QMessageBox.question(
+            self, "Confirmation", "Supprimer ce seuil définitivement ?", QMessageBox.Yes | QMessageBox.No
+        )
+        if confirm == QMessageBox.Yes:
+            try:
+                self.manager.delete_threshold(thresh["id"])
+                self.show_custom_thresholds()
+            except Exception as e:
+                QMessageBox.critical(self, "Erreur", f"Impossible de supprimer le seuil : {e}", QMessageBox.Ok)
+
+    def refresh_thresholds(self):
+        if self.showing_iso:
+            self.show_iso_thresholds()
+        else:
+            self.show_custom_thresholds()
 
 class ThresholdForm(QDialog):
     def __init__(self, db, threshold=None, parent=None):
@@ -99,23 +399,13 @@ class ThresholdForm(QDialog):
             }
             QPushButton:hover { background-color: #1c5ea3; color: #fff; }
         """)
-        # Champs du formulaire
-        self.input_project = QComboBox()
-        # Charger les projets existants
-        for p in self.db.conn.execute("SELECT id, company_name FROM projects").fetchall():
-            self.input_project.addItem(p["company_name"], p["id"])
         self.input_test = QLineEdit()
         self.input_min = QLineEdit()
         self.input_min.setPlaceholderText("Optionnel")
         self.input_max = QLineEdit()
         self.input_max.setPlaceholderText("Optionnel")
 
-        # Pré-remplissage si modification
         if threshold:
-            # seuil passé sous forme de dict avec clés id, project_id, test_name, min_value, max_value
-            idx = self.input_project.findData(threshold["project_id"])
-            if idx >= 0:
-                self.input_project.setCurrentIndex(idx)
             self.input_test.setText(threshold.get("test_name", ""))
             if threshold.get("min_value") is not None:
                 self.input_min.setText(str(threshold["min_value"]))
@@ -123,7 +413,6 @@ class ThresholdForm(QDialog):
                 self.input_max.setText(str(threshold["max_value"]))
 
         form = QFormLayout()
-        form.addRow("Projet :", self.input_project)
         form.addRow("Nom du test :", self.input_test)
         form.addRow("Valeur min :", self.input_min)
         form.addRow("Valeur max :", self.input_max)
@@ -144,145 +433,8 @@ class ThresholdForm(QDialog):
         self.setLayout(main_layout)
 
     def get_data(self):
-        # Retourne les valeurs saisies, sous forme brute
         return {
-            "project_id": self.input_project.currentData(),
             "test_name": self.input_test.text().strip(),
             "min_value": self.input_min.text().strip(),
             "max_value": self.input_max.text().strip(),
         }
-
-class ThresholdsWidget(QWidget):
-    def __init__(self, db, user, parent=None):
-        super().__init__(parent)
-        self.db = db
-        self.user = user
-        self.manager = ThresholdManager(db)
-
-        self.setStyleSheet("""
-            QWidget { background-color: #e0e0e0; }
-            QPushButton {
-                background-color: #1c5ea3; color: #fff; border-radius: 8px;
-                padding: 8px 24px; font-weight: bold; font-size: 14px;
-            }
-            QPushButton:hover { background-color: #b8d5ed; color: #1c5ea3; }
-        """)
-
-        self.table = ThresholdsTable(self.db)
-        self.table.setFocusPolicy(Qt.NoFocus)
-
-        self.btn_add = QPushButton("Ajouter Seuil")
-        self.btn_edit = QPushButton("Modifier Seuil")
-        self.btn_delete = QPushButton("Supprimer Seuil")
-
-        self.btn_add.clicked.connect(self.add_threshold)
-        self.btn_edit.clicked.connect(self.edit_threshold)
-        self.btn_delete.clicked.connect(self.delete_threshold)
-
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        btn_layout.addWidget(self.btn_add)
-        btn_layout.addWidget(self.btn_edit)
-        btn_layout.addWidget(self.btn_delete)
-        btn_layout.addStretch()
-
-        layout = QVBoxLayout()
-        layout.addWidget(self.table)
-        layout.addLayout(btn_layout)
-        self.setLayout(layout)
-
-        # Seuls Administrateur et Technicien premium
-        if self.user['role'] not in ("Administrateur", "Technicien premium"):
-            self.btn_add.hide()
-            self.btn_edit.hide()
-            self.btn_delete.hide()
-
-        self.refresh_thresholds()
-
-    def refresh_thresholds(self):
-        rows = self.manager.get_thresholds()
-        self.table.populate(rows)
-
-    def add_threshold(self):
-        if self.user['role'] not in ("Administrateur", "Technicien premium"):
-            QMessageBox.warning(self, "Accès refusé", "Vous n'avez pas accès à cette fonctionnalité.", QMessageBox.Ok)
-            return
-
-        dialog = ThresholdForm(self.db)
-        if dialog.exec_() == QDialog.Accepted:
-            data = dialog.get_data()
-            # validation des champs
-            if not data["test_name"] or data["project_id"] is None:
-                QMessageBox.warning(self, "Champs manquants", "Projet et nom du test obligatoires.", QMessageBox.Ok)
-                return
-            # au moins une borne doit être renseignée
-            if data["min_value"] == "" and data["max_value"] == "":
-                QMessageBox.warning(self, "Champs manquants", "Au moins une valeur min ou max doit être renseignée.", QMessageBox.Ok)
-                return
-            try:
-                min_val = float(data["min_value"]) if data["min_value"] else None
-                max_val = float(data["max_value"]) if data["max_value"] else None
-            except ValueError:
-                QMessageBox.warning(self, "Valeur incorrecte", "Les valeurs min/max doivent être des nombres.", QMessageBox.Ok)
-                return
-            try:
-                self.manager.add_threshold(data["project_id"], data["test_name"], min_val, max_val)
-                self.refresh_thresholds()
-            except Exception as e:
-                QMessageBox.critical(self, "Erreur", f"Impossible d’ajouter le seuil : {e}", QMessageBox.Ok)
-
-    def edit_threshold(self):
-        if self.user['role'] not in ("Administrateur", "Technicien premium"):
-            QMessageBox.warning(self, "Accès refusé", "Vous n'avez pas accès à cette fonctionnalité.", QMessageBox.Ok)
-            return
-
-        tid = self.table.get_selected_threshold_id()
-        if tid is None:
-            QMessageBox.warning(self, "Aucun seuil", "Veuillez sélectionner un seuil à modifier.", QMessageBox.Ok)
-            return
-
-        thresh = self.manager.get_threshold(tid)
-        if not thresh:
-            QMessageBox.warning(self, "Erreur", "Seuil non trouvé.", QMessageBox.Ok)
-            return
-
-        dialog = ThresholdForm(self.db, thresh)
-        if dialog.exec_() == QDialog.Accepted:
-            data = dialog.get_data()
-            if not data["test_name"] or data["project_id"] is None:
-                QMessageBox.warning(self, "Champs manquants", "Projet et nom du test obligatoires.", QMessageBox.Ok)
-                return
-            if data["min_value"] == "" and data["max_value"] == "":
-                QMessageBox.warning(self, "Champs manquants", "Au moins une valeur min ou max doit être renseignée.", QMessageBox.Ok)
-                return
-            try:
-                min_val = float(data["min_value"]) if data["min_value"] else None
-                max_val = float(data["max_value"]) if data["max_value"] else None
-            except ValueError:
-                QMessageBox.warning(self, "Valeur incorrecte", "Les valeurs min/max doivent être des nombres.", QMessageBox.Ok)
-                return
-            try:
-                self.manager.update_threshold(tid, data["project_id"], data["test_name"], min_val, max_val)
-                self.refresh_thresholds()
-            except Exception as e:
-                QMessageBox.critical(self, "Erreur", f"Impossible de modifier le seuil : {e}", QMessageBox.Ok)
-
-    def delete_threshold(self):
-        if self.user['role'] not in ("Administrateur", "Technicien premium"):
-            QMessageBox.warning(self, "Accès refusé", "Vous n'avez pas accès à cette fonctionnalité.", QMessageBox.Ok)
-            return
-
-        tid = self.table.get_selected_threshold_id()
-        if tid is None:
-            QMessageBox.warning(self, "Aucun seuil", "Veuillez sélectionner un seuil à supprimer.", QMessageBox.Ok)
-            return
-
-        confirm = QMessageBox.question(
-            self, "Confirmation", "Supprimer ce seuil définitivement ?", QMessageBox.Yes | QMessageBox.No
-        )
-        if confirm == QMessageBox.Yes:
-            try:
-                self.manager.delete_threshold(tid)
-                self.refresh_thresholds()
-            except Exception as e:
-                QMessageBox.critical(self, "Erreur", f"Impossible de supprimer le seuil : {e}", QMessageBox.Ok)
