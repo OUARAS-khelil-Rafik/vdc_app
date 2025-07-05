@@ -44,12 +44,14 @@ class Database:
             # Projets
             self.conn.execute("""
             CREATE TABLE IF NOT EXISTS projects (
-                id              INTEGER PRIMARY KEY AUTOINCREMENT,
-                company_name    TEXT NOT NULL,
-                location        TEXT,
-                room_type       TEXT,
-                test_date       TEXT NOT NULL,
-                created_by      INTEGER NOT NULL,
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_name      TEXT NOT NULL,
+                location          TEXT,
+                room_type         TEXT,
+                test_date         TEXT NOT NULL,
+                created_by        INTEGER NOT NULL,
+                iso_class         TEXT NOT NULL CHECK(iso_class IN ('ISO 1','ISO 2','ISO 3','ISO 4','ISO 5','ISO 6','ISO 7','ISO 8','ISO 9')),
+                validation_status TEXT NOT NULL CHECK(validation_status IN ('En attente','Validé')) DEFAULT 'En attente',
                 FOREIGN KEY(created_by) REFERENCES users(id)
             );
             """)
