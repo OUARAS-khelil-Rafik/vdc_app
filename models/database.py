@@ -73,6 +73,7 @@ class Database:
                 id               INTEGER PRIMARY KEY AUTOINCREMENT,
                 project_id       INTEGER NOT NULL,
                 technician_id    INTEGER NOT NULL,
+                test_name        TEXT    NOT NULL,
                 measurement_date TEXT    NOT NULL,
                 is_validated     INTEGER DEFAULT 0,
                 validated_by     INTEGER,

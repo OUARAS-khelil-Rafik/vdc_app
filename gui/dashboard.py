@@ -19,10 +19,12 @@ from .login import LoginWindow
 from .project import ProjectWidget
 from .thresholds import ThresholdsWidget
 from .users import UsersWidget
+from .test import TestsWidget
 from PyQt5.QtGui import QIcon
 
 class DashboardToolbar(QToolBar):
     def __init__(self, user, parent=None):
+        _ = user  # Mark user as used to avoid linter warning
         super().__init__("Tableau de bord", parent)
         self.setMovable(False)
         self.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
@@ -38,6 +40,7 @@ class DashboardToolbar(QToolBar):
         """)
         self.actions_dict = {
             'projects': QAction(QIcon("icons/projects.png"), "Projets", self),
+            'tests': QAction(QIcon("icons/tests.png"), "Tests", self),
             'thresholds': QAction(QIcon("icons/thresholds.png"), "Seuils", self),
             'users': QAction(QIcon("icons/users.png"), "Utilisateurs", self),
             'logout': QAction(QIcon("icons/logout.png"), "Déconnexion", self)
@@ -52,7 +55,7 @@ class DashboardToolbar(QToolBar):
         self.spacer_right.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         self.addWidget(self.spacer_left)
-        for key in ['projects', 'thresholds', 'users']:
+        for key in ['projects', 'tests', 'thresholds', 'users']:
             self.addAction(self.actions_dict[key])
         self.addSeparator()
         self.addAction(self.actions_dict['logout'])
@@ -91,6 +94,7 @@ class DashboardWindow(QMainWindow):
 
         # Connect actions based on role
         self.toolbar.actions_dict['projects'].triggered.connect(self.show_projects)
+        self.toolbar.actions_dict['tests'].triggered.connect(self.show_tests)
         if self.user.get('role') in ('Administrateur', 'Technicien premium'):
             self.toolbar.actions_dict['thresholds'].setVisible(True)
             self.toolbar.actions_dict['thresholds'].triggered.connect(self.show_thresholds)
@@ -118,20 +122,40 @@ class DashboardWindow(QMainWindow):
         self.central_layout.addWidget(self.content_widget)
 
         self.project_widget = ProjectWidget(self.db, self.user)
+        self.tests_widget = TestsWidget(self.db, self.user)
         self.users_widget = UsersWidget(self.db)
         self.thresholds_widget = ThresholdsWidget(self.db, self.user)
         self.content_layout.addWidget(self.project_widget)
         self.project_widget.show()
+        self.tests_widget.hide()
         self.users_widget.hide()
         self.thresholds_widget.hide()
 
     def show_projects(self):
         self.project_widget.refresh_projects()
         self.project_widget.show()
+        self.tests_widget.hide()
         self.users_widget.hide()
         self.thresholds_widget.hide()
         if self.content_layout.indexOf(self.project_widget) == -1:
             self.content_layout.addWidget(self.project_widget)
+        if self.content_layout.indexOf(self.tests_widget) != -1:
+            self.content_layout.removeWidget(self.tests_widget)
+        if self.content_layout.indexOf(self.users_widget) != -1:
+            self.content_layout.removeWidget(self.users_widget)
+        if self.content_layout.indexOf(self.thresholds_widget) != -1:
+            self.content_layout.removeWidget(self.thresholds_widget)
+
+    def show_tests(self):
+        self.tests_widget.refresh_tests()
+        self.project_widget.hide()
+        self.tests_widget.show()
+        self.users_widget.hide()
+        self.thresholds_widget.hide()
+        if self.content_layout.indexOf(self.tests_widget) == -1:
+            self.content_layout.addWidget(self.tests_widget)
+        if self.content_layout.indexOf(self.project_widget) != -1:
+            self.content_layout.removeWidget(self.project_widget)
         if self.content_layout.indexOf(self.users_widget) != -1:
             self.content_layout.removeWidget(self.users_widget)
         if self.content_layout.indexOf(self.thresholds_widget) != -1:
@@ -140,6 +164,7 @@ class DashboardWindow(QMainWindow):
     def show_thresholds(self):
         self.thresholds_widget.refresh_thresholds()
         self.project_widget.hide()
+        self.tests_widget.hide()
         self.users_widget.hide()
         if self.content_layout.indexOf(self.thresholds_widget) == -1:
             self.content_layout.addWidget(self.thresholds_widget)
@@ -148,12 +173,15 @@ class DashboardWindow(QMainWindow):
     def show_users(self):
         self.users_widget.refresh_users()
         self.project_widget.hide()
+        self.tests_widget.hide()
         self.users_widget.show()
         self.thresholds_widget.hide()
         if self.content_layout.indexOf(self.users_widget) == -1:
             self.content_layout.addWidget(self.users_widget)
         if self.content_layout.indexOf(self.project_widget) != -1:
             self.content_layout.removeWidget(self.project_widget)
+        if self.content_layout.indexOf(self.tests_widget) != -1:
+            self.content_layout.removeWidget(self.tests_widget)
         if self.content_layout.indexOf(self.thresholds_widget) != -1:
             self.content_layout.removeWidget(self.thresholds_widget)
 
