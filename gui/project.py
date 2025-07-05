@@ -192,22 +192,16 @@ class ProjectWidget(QWidget):
         self.btn_add = QPushButton("Ajouter Projet")
         self.btn_edit = QPushButton("Modifier Projet")
         self.btn_delete = QPushButton("Supprimer Projet")
-        self.btn_test = QPushButton("Saisir Test")
-        self.btn_validate = QPushButton("Valider Test")
         self.btn_pdf = QPushButton("Générer un PDF")
         self.btn_add.clicked.connect(self.add_project)
         self.btn_edit.clicked.connect(self.edit_project)
         self.btn_delete.clicked.connect(self.delete_project)
-        self.btn_test.clicked.connect(self.saisir_test)
-        self.btn_validate.clicked.connect(self.valider_test)
         self.btn_pdf.clicked.connect(self.generer_pdf)
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
         btn_layout.addWidget(self.btn_add)
         btn_layout.addWidget(self.btn_edit)
         btn_layout.addWidget(self.btn_delete)
-        btn_layout.addWidget(self.btn_test)
-        btn_layout.addWidget(self.btn_validate)
         btn_layout.addWidget(self.btn_pdf)
         btn_layout.addStretch()
         layout = QVBoxLayout()
@@ -270,30 +264,6 @@ class ProjectWidget(QWidget):
                 self.refresh_projects()
             except Exception as e:
                 QMessageBox.critical(self, "Erreur", f"Impossible de supprimer le projet : {e}", QMessageBox.Ok)
-
-    def saisir_test(self):
-        project_id = self.table.get_selected_project_id()
-        if project_id is None:
-            QMessageBox.warning(self, "Aucun projet", "Veuillez sélectionner un projet.", QMessageBox.Ok)
-            return
-        try:
-            dialog = TestForm(self.db, project_id, self.user)
-            if dialog.exec_() == QDialog.Accepted:
-                self.refresh_projects()
-        except ImportError:
-            QMessageBox.critical(self, "Erreur", "Impossible d'importer TestForm depuis gui/test.py.", QMessageBox.Ok)
-            return
-
-    def valider_test(self):
-        role = self.user['role']
-        if role not in ('Administrateur', 'Technicien premium'):
-            QMessageBox.warning(self, "Accès refusé", "Vous n'avez pas accès à cette fonctionnalité.", QMessageBox.Ok)
-            return
-        project_id = self.table.get_selected_project_id()
-        if project_id is None:
-            QMessageBox.warning(self, "Aucun projet", "Veuillez sélectionner un projet.", QMessageBox.Ok)
-            return
-        QMessageBox.information(self, "Validation", "Fonctionnalité de validation à venir.", QMessageBox.Ok)
 
     def generer_pdf(self):
         role = self.user['role']
