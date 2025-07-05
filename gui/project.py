@@ -9,7 +9,6 @@ from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor
 from models.projectmanager import ProjectManager
 from models.utils import dict_from_row
-from .test import TestForm
 
 class NoFocusTableWidget(QTableWidget):
     def __init__(self, *args, **kwargs):
