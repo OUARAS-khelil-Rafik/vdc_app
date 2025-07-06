@@ -50,9 +50,11 @@ class Database:
                 room_type         TEXT,
                 test_date         TEXT NOT NULL,
                 created_by        INTEGER NOT NULL,
-                iso_class         TEXT NOT NULL CHECK(iso_class IN ('ISO 1','ISO 2','ISO 3','ISO 4','ISO 5','ISO 6','ISO 7','ISO 8','ISO 9')),
-                validation_status TEXT NOT NULL CHECK(validation_status IN ('En attente','Validé')) DEFAULT 'En attente',
-                FOREIGN KEY(created_by) REFERENCES users(id)
+                username          TEXT NOT NULL,
+                iso_class         TEXT NOT NULL CHECK(iso_class IN ('ISO 1', 'ISO 2', 'ISO 3', 'ISO 4', 'ISO 5', 'ISO 6', 'ISO 7', 'ISO 8', 'ISO 9')),
+                validation_status TEXT NOT NULL DEFAULT 'En attente' CHECK(validation_status IN ('En attente','Validé')),
+                FOREIGN KEY(created_by) REFERENCES users(id),
+                FOREIGN KEY(username) REFERENCES users(id)
             );
             """)
 
@@ -118,7 +120,7 @@ class Database:
                 "VALUES (?, ?, ?, ?)",
                 (username, pwd_hash, role, validate_user)
             )
-        return cursor.lastrowid
+            return cursor.lastrowid
 
     def authenticate_user(self,
                           username: str,
@@ -135,6 +137,7 @@ class Database:
             (username, pwd_hash)
         )
         row = cursor.fetchone()
-        if row:
+        if row is not None:
             return {"id": row["id"], "username": row["username"], "role": row["role"]}
-        return None
+        else:
+            return None

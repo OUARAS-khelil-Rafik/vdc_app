@@ -18,11 +18,11 @@ class NoFocusTableWidget(QTableWidget):
 class ProjectTable(NoFocusTableWidget):
     HEADERS = [
         "ID", "Entreprise", "Localisation", "Type de salle", "Date de test",
-        "Classe ISO", "Statut validation"
+        "Classe ISO", "Statut validation", "Utilisateur assigné"
     ]
     COLUMNS = [
         "id", "company_name", "location", "room_type", "test_date",
-        "iso_class", "validation_status"
+        "iso_class", "validation_status", "username"
     ]
 
     def __init__(self, parent=None):
@@ -80,6 +80,18 @@ class ProjectTable(NoFocusTableWidget):
         item = self.item(sel, 0)
         return item.data(Qt.UserRole) if item else None
 
+# --- Ajout d'une méthode utilitaire pour récupérer les seuils ISO ---
+def get_iso_thresholds(iso_class):
+    """
+    Récupère les seuils pour une classe ISO donnée.
+    Importé dynamiquement depuis gui/thresholds.py pour éviter les imports circulaires.
+    """
+    try:
+        from gui.thresholds import ISO_THRESHOLDS
+        return ISO_THRESHOLDS.get(iso_class, {})
+    except ImportError:
+        return {}
+
 class ProjectForm(QDialog):
     ISO_CLASSES = [f"ISO {i}" for i in range(1, 10)]
     VALIDATION_STATUSES = ["En attente", "Validé"]
@@ -90,6 +102,7 @@ class ProjectForm(QDialog):
         self.user = user
         self.manager = ProjectManager(db)
         self.project = None
+        self.users_list = self.manager.get_users_for_assignment()  # You need to implement this in ProjectManager
         if isinstance(project, int):
             self.project = self.manager.get_project(project)
         elif project:
@@ -99,7 +112,7 @@ class ProjectForm(QDialog):
     def _init_ui(self):
         self.setWindowTitle("Modifier projet" if self.project else "Nouveau projet")
         self.setModal(True)
-        self.resize(400, 250)
+        self.resize(400, 300)
         self.setStyleSheet("""
             QDialog { background-color: #f0f0f0; }
             QLineEdit, QDateEdit, QComboBox {
@@ -126,6 +139,12 @@ class ProjectForm(QDialog):
         self.input_iso.addItems(self.ISO_CLASSES)
         self.input_status   = QComboBox()
         self.input_status.addItems(self.VALIDATION_STATUSES)
+        self.input_assigned_user = QComboBox()
+        self.input_assigned_user.addItems([u['username'] for u in self.users_list])
+
+        # Ajout d'un bouton pour afficher les seuils ISO sélectionnés
+        self.btn_show_thresholds = QPushButton("Voir seuils ISO")
+        self.btn_show_thresholds.clicked.connect(self.show_iso_thresholds_dialog)
 
         if self.project:
             self.input_company.setText(self.project.get("company_name", ""))
@@ -142,9 +161,13 @@ class ProjectForm(QDialog):
             idx_status = self.input_status.findText(status)
             if idx_status >= 0:
                 self.input_status.setCurrentIndex(idx_status)
+            assigned_username = self.project.get("username", "")
+            idx_user = self.input_assigned_user.findText(assigned_username)
+            if idx_user >= 0:
+                self.input_assigned_user.setCurrentIndex(idx_user)
         for widget in [
             self.input_company, self.input_location, self.input_room,
-            self.input_date, self.input_iso, self.input_status
+            self.input_date, self.input_iso, self.input_status, self.input_assigned_user
         ]:
             widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.btn_save   = QPushButton("Modifier" if self.project else "Enregistrer")
@@ -159,6 +182,8 @@ class ProjectForm(QDialog):
         form_layout.addRow("Date du test :",  self.input_date)
         form_layout.addRow("Classe ISO :",    self.input_iso)
         form_layout.addRow("Statut validation :", self.input_status)
+        form_layout.addRow("Utilisateur assigné :", self.input_assigned_user)
+        form_layout.addRow("", self.btn_show_thresholds)
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
         btn_layout.addWidget(self.btn_save)
@@ -170,6 +195,17 @@ class ProjectForm(QDialog):
         main_layout.setStretch(1, 0)
         self.setLayout(main_layout)
 
+    def show_iso_thresholds_dialog(self):
+        iso_class = self.input_iso.currentText()
+        thresholds = get_iso_thresholds(iso_class)
+        if not thresholds:
+            QMessageBox.information(self, "Seuils ISO", f"Aucun seuil trouvé pour {iso_class}.", QMessageBox.Ok)
+            return
+        msg = f"Seuils pour {iso_class} :\n\n"
+        for test, value in thresholds.items():
+            msg += f"- {test} : {value}\n"
+        QMessageBox.information(self, f"Seuils {iso_class}", msg, QMessageBox.Ok)
+
     def save_project(self):
         company  = self.input_company.text().strip()
         location = self.input_location.text().strip()
@@ -177,17 +213,20 @@ class ProjectForm(QDialog):
         date     = self.input_date.date().toString("yyyy-MM-dd")
         iso_class = self.input_iso.currentText()
         validation_status = self.input_status.currentText()
-        if not company or not date or not iso_class or not validation_status:
-            QMessageBox.warning(self, "Champs manquants", "Le nom de l'entreprise, la date, la classe ISO et le statut sont obligatoires.", QMessageBox.Ok)
+        assigned_user_idx = self.input_assigned_user.currentIndex()
+        assigned_user_username = self.users_list[assigned_user_idx]['username'] if assigned_user_idx >= 0 else None
+        assigned_user_id = self.users_list[assigned_user_idx]['id'] if assigned_user_idx >= 0 else None
+        if not company or not date or not iso_class or not validation_status or assigned_user_id is None:
+            QMessageBox.warning(self, "Champs manquants", "Le nom de l'entreprise, la date, la classe ISO, le statut et l'utilisateur assigné sont obligatoires.", QMessageBox.Ok)
             return
         try:
             if self.project:
                 self.manager.update_project(
-                    self.project["id"], company, location, room, date, iso_class, validation_status
+                    self.project["id"], company, location, room, date, iso_class, validation_status, assigned_user_id
                 )
             else:
                 self.manager.add_project(
-                    company, location, room, date, self.user['id'], iso_class, validation_status
+                    company, location, room, date, self.user['id'], iso_class, validation_status, assigned_user_id
                 )
             self.accept()
         except Exception as e:
