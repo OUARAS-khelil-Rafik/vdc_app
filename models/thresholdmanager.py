@@ -6,7 +6,6 @@ models/thresholdmanager.py
 
 Gestion des seuils de conformité par projet et par nom de test.
 """
-import sqlite3
 from typing import List, Dict, Any, Optional
 
 class ThresholdManager:
@@ -15,68 +14,73 @@ class ThresholdManager:
 
     def get_thresholds(self, project_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """
-        Si project_id est fourni, ne renvoie que les seuils pour ce projet.
-        Sinon, renvoie tous les seuils.
+        If project_id is provided, returns only the thresholds for that project.
+        Otherwise, returns all thresholds.
         """
+        query = (
+            "SELECT id, iso_name, project_id, test_name, value "
+            "FROM thresholds"
+        )
+        params = ()
         if project_id is not None:
-            rows = self.db.conn.execute(
-                "SELECT id, project_id, test_name, min_value, max_value "
-                "FROM thresholds WHERE project_id = ?",
-                (project_id,)
-            ).fetchall()
-        else:
-            rows = self.db.conn.execute(
-                "SELECT id, project_id, test_name, min_value, max_value "
-                "FROM thresholds"
-            ).fetchall()
+            query += " WHERE project_id = ?"
+            params = (project_id,)
+        rows = self.db.conn.execute(query, params).fetchall()
         return [dict(row) for row in rows]
 
     def get_threshold(self, threshold_id: int) -> Optional[Dict[str, Any]]:
         """
-        Renvoie un seuil unique par son ID, ou None s’il n’existe pas.
+        Returns a single threshold by its ID.
         """
         row = self.db.conn.execute(
-            "SELECT id, project_id, test_name, min_value, max_value "
+            "SELECT id, iso_name, project_id, test_name, value "
             "FROM thresholds WHERE id = ?",
             (threshold_id,)
         ).fetchone()
         return dict(row) if row else None
 
-    def add_threshold(self,
-                      project_id: int,
-                      test_name: str,
-                      min_value: Optional[float],
-                      max_value: Optional[float]) -> None:
+    def add_threshold(
+        self,
+        iso_name: Optional[str],
+        project_id: Optional[int],
+        test_name: str,
+        value: Optional[float]
+    ) -> None:
         """
-        Crée un nouveau seuil pour un projet et un test donné.
+        Creates a new threshold for a given project and test.
+        iso_name: set for ISO thresholds, None for custom thresholds.
+        project_id: set for custom thresholds, None for ISO thresholds.
         """
+        if project_id is None and iso_name is None:
+            raise ValueError("Either project_id or iso_name must be provided.")
         self.db.conn.execute(
-            "INSERT INTO thresholds (project_id, test_name, min_value, max_value) "
+            "INSERT INTO thresholds (iso_name, project_id, test_name, value) "
             "VALUES (?, ?, ?, ?)",
-            (project_id, test_name, min_value, max_value)
+            (iso_name, project_id, test_name, value)
         )
         self.db.conn.commit()
 
-    def update_threshold(self,
-                         threshold_id: int,
-                         project_id: int,
-                         test_name: str,
-                         min_value: Optional[float],
-                         max_value: Optional[float]) -> None:
-        """
-        Met à jour un seuil existant.
-        """
+    def update_threshold(
+        self,
+        threshold_id: int,
+        iso_name: Optional[str],
+        project_id: Optional[int],
+        test_name: str,
+        value: Optional[float]
+    ) -> None:
+        if project_id is None and iso_name is None:
+            raise ValueError("Either project_id or iso_name must be provided.")
         self.db.conn.execute(
             "UPDATE thresholds "
-            "SET project_id = ?, test_name = ?, min_value = ?, max_value = ? "
+            "SET iso_name = ?, project_id = ?, test_name = ?, value = ? "
             "WHERE id = ?",
-            (project_id, test_name, min_value, max_value, threshold_id)
+            (iso_name, project_id, test_name, value, threshold_id)
         )
         self.db.conn.commit()
 
     def delete_threshold(self, threshold_id: int) -> None:
         """
-        Supprime un seuil.
+        Deletes a threshold.
         """
         self.db.conn.execute(
             "DELETE FROM thresholds WHERE id = ?",

@@ -8,22 +8,91 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
 
 from models.thresholdmanager import ThresholdManager
+import sqlite3
+import os
 
-# Seuils ISO 14644-1 prédéfinis (µm/m³ pour particules, °C et %)
-ISO_THRESHOLDS = {
-    "ISO 1": {"Particules >0.5 µm": 10,      "Particules >5 µm": 0,     "Température": 22, "Humidité relative": 50},
-    "ISO 2": {"Particules >0.5 µm": 100,     "Particules >5 µm": 0,     "Température": 22, "Humidité relative": 50},
-    "ISO 3": {"Particules >0.5 µm": 1000,    "Particules >5 µm": 0,     "Température": 22, "Humidité relative": 50},
-    "ISO 4": {"Particules >0.5 µm": 10000,   "Particules >5 µm": 0,     "Température": 22, "Humidité relative": 50},
-    "ISO 5": {"Particules >0.5 µm": 100000,  "Particules >5 µm": 0,     "Température": 22, "Humidité relative": 50},
-    "ISO 6": {"Particules >0.5 µm": 1000000, "Particules >5 µm": 0,     "Température": 22, "Humidité relative": 50},
-    "ISO 7": {"Particules >0.5 µm": 352000,  "Particules >5 µm": 2900,  "Température": 22, "Humidité relative": 50},
-    "ISO 8": {"Particules >0.5 µm": 832000,  "Particules >5 µm": 29300, "Température": 22, "Humidité relative": 50},
-    "ISO 9": {"Particules >0.5 µm": 8320000, "Particules >5 µm": 293000,"Température": 22, "Humidité relative": 50},
+# Predefined ISO 14644-1 thresholds (µm/m³ for particles, °C and %)
+DEFAULT_ISO_THRESHOLDS = {
+    "ISO 1": {"Particles >0.5 µm": 10,      "Particles >5 µm": 0,     "Temperature °C": 22, "Relative Humidity %": 50},
+    "ISO 2": {"Particles >0.5 µm": 100,     "Particles >5 µm": 0,     "Temperature °C": 22, "Relative Humidity %": 50},
+    "ISO 3": {"Particles >0.5 µm": 1000,    "Particles >5 µm": 0,     "Temperature °C": 22, "Relative Humidity %": 50},
+    "ISO 4": {"Particles >0.5 µm": 10000,   "Particles >5 µm": 0,     "Temperature °C": 22, "Relative Humidity %": 50},
+    "ISO 5": {"Particles >0.5 µm": 100000,  "Particles >5 µm": 0,     "Temperature °C": 22, "Relative Humidity %": 50},
+    "ISO 6": {"Particles >0.5 µm": 1000000, "Particles >5 µm": 0,     "Temperature °C": 22, "Relative Humidity %": 50},
+    "ISO 7": {"Particles >0.5 µm": 352000,  "Particles >5 µm": 2900,  "Temperature °C": 22, "Relative Humidity %": 50},
+    "ISO 8": {"Particles >0.5 µm": 832000,  "Particles >5 µm": 29300, "Temperature °C": 22, "Relative Humidity %": 50},
+    "ISO 9": {"Particles >0.5 µm": 8320000, "Particles >5 µm": 293000,"Temperature °C": 22, "Relative Humidity %": 50},
 }
 
-from PyQt5.QtWidgets import QWidget, QPushButton, QComboBox, QHBoxLayout
-from PyQt5.QtCore import Qt
+DB_PATH = os.path.join(os.path.dirname(__file__), '..', 'data/vdc.db')
+
+def ensure_thresholds_table():
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS thresholds (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            iso_name TEXT, -- ISO 1, ISO 2, etc. (NULL si seuil personnalisé)
+            test_name TEXT NOT NULL,
+            value REAL,
+            UNIQUE(iso_name, test_name)
+        )
+    """)
+    conn.commit()
+    # Populate with defaults if empty
+    c.execute("SELECT COUNT(*) FROM thresholds WHERE iso_name IS NOT NULL")
+    if c.fetchone()[0] == 0:
+        for iso, tests in DEFAULT_ISO_THRESHOLDS.items():
+            for test, value in tests.items():
+                c.execute(
+                    "INSERT OR IGNORE INTO thresholds (iso_name, test_name, value) VALUES (?, ?, ?)",
+                    (iso, test, value)
+                )
+        conn.commit()
+    conn.close()
+
+def load_iso_thresholds():
+    ensure_thresholds_table()
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT iso_name, test_name, value FROM thresholds WHERE iso_name IS NOT NULL")
+    rows = c.fetchall()
+    iso_thresholds = {}
+    for iso, test, value in rows:
+        if iso not in iso_thresholds:
+            iso_thresholds[iso] = {}
+        iso_thresholds[iso][test] = value
+    conn.close()
+    # Ensure all ISOs are present (fallback to default if missing)
+    for iso, tests in DEFAULT_ISO_THRESHOLDS.items():
+        if iso not in iso_thresholds:
+            iso_thresholds[iso] = tests.copy()
+        else:
+            for test, value in tests.items():
+                if test not in iso_thresholds[iso]:
+                    iso_thresholds[iso][test] = value
+    return iso_thresholds
+
+def update_iso_threshold(iso_name, test_name, value):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        INSERT INTO thresholds (iso_name, test_name, value)
+        VALUES (?, ?, ?)
+        ON CONFLICT(iso_name, test_name) DO UPDATE SET value=excluded.value
+    """, (iso_name, test_name, value))
+    conn.commit()
+    conn.close()
+
+def delete_iso_threshold(iso_name, test_name):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("DELETE FROM thresholds WHERE iso_name=? AND test_name=?", (iso_name, test_name))
+    conn.commit()
+    conn.close()
+
+# Use this global variable in the rest of the code
+ISO_THRESHOLDS = load_iso_thresholds()
 
 class IsoChoiceWidget(QWidget):
     def __init__(self, combo: QComboBox, parent=None):
@@ -41,7 +110,7 @@ class IsoChoiceWidget(QWidget):
         self.btn.setCursor(Qt.PointingHandCursor)
         self.btn.setText(f"{self.combo.currentText()}  ▲")
 
-        # Signaux
+        # Signals
         self.btn.clicked.connect(self.show_combo_popup)
         self.combo.currentTextChanged.connect(self.update_text)
 
@@ -109,18 +178,13 @@ class IsoChoiceWidget(QWidget):
 
     def show_combo_popup(self):
         self.combo.setFixedWidth(self.btn.width())
-        
-        # Force the popup to open below the button
         popup = self.combo.view().window()
         pos = self.combo.mapToGlobal(self.combo.rect().bottomLeft())
-        popup.move(pos)  # Move popup below combo
+        popup.move(pos)
         self.combo.showPopup()
         self.combo.setFocus()
 
-
-
 class ThresholdsTable(QTableWidget):
-    # Change headers: "Test" (au lieu de "Seuil"), et "Seuil" (au lieu de "Min"/"Max")
     HEADERS = ["Test", "Seuil"]
 
     def __init__(self, parent=None):
@@ -165,8 +229,8 @@ class ThresholdsTable(QTableWidget):
         for seuil, valeur in iso_data.items():
             row = self.rowCount()
             self.insertRow(row)
-            self.setItem(row, 0, QTableWidgetItem(seuil))  # "Test"
-            self.setItem(row, 1, QTableWidgetItem(str(valeur)))  # "Seuil"
+            self.setItem(row, 0, QTableWidgetItem(seuil))
+            self.setItem(row, 1, QTableWidgetItem(str(valeur)))
 
     def populate_custom(self, rows):
         self.setRowCount(0)
@@ -174,16 +238,8 @@ class ThresholdsTable(QTableWidget):
             idx = self.rowCount()
             self.insertRow(idx)
             self.setItem(idx, 0, QTableWidgetItem(row.get("test_name", "")))
-            min_val = row.get("min_value")
-            max_val = row.get("max_value")
-            if min_val is not None and max_val is not None:
-                seuil_str = f"{min_val} - {max_val}"
-            elif min_val is not None:
-                seuil_str = f">= {min_val}"
-            elif max_val is not None:
-                seuil_str = f"<= {max_val}"
-            else:
-                seuil_str = ""
+            value = row.get("value")
+            seuil_str = str(value) if value is not None else ""
             self.setItem(idx, 1, QTableWidgetItem(seuil_str))
 
     def get_selected_test_name(self):
@@ -241,10 +297,9 @@ class ThresholdsWidget(QWidget):
         self.iso_combo.addItems(list(ISO_THRESHOLDS.keys()))
         self.iso_combo.setCurrentText(self.selected_iso)
         self.iso_combo.currentTextChanged.connect(self.on_iso_changed)
-        self.iso_combo.setVisible(False)  # Hidden, used by IsoChoiceWidget
+        self.iso_combo.setVisible(False)
 
         self.iso_choice = IsoChoiceWidget(self.iso_combo)
-        # self.iso_combo.currentTextChanged.connect(self.iso_choice.update_text) # Already connected in IsoChoiceWidget
 
         self.btn_add = QPushButton("Ajouter Seuil")
         self.btn_edit = QPushButton("Modifier Seuil")
@@ -254,7 +309,6 @@ class ThresholdsWidget(QWidget):
         self.btn_edit.clicked.connect(self.edit_threshold)
         self.btn_delete.clicked.connect(self.delete_threshold)
 
-        # Place iso_choice above, buttons below
         top_layout = QHBoxLayout()
         top_layout.addWidget(self.iso_choice)
         top_layout.addStretch()
@@ -272,7 +326,6 @@ class ThresholdsWidget(QWidget):
         layout.addLayout(btn_layout)
         self.setLayout(layout)
 
-        # Seuls Administrateur et Technicien premium
         if self.user['role'] not in ("Administrateur", "Technicien premium"):
             self.btn_add.hide()
             self.btn_edit.hide()
@@ -299,23 +352,48 @@ class ThresholdsWidget(QWidget):
             QMessageBox.warning(self, "Accès refusé", "Vous n'avez pas accès à cette fonctionnalité.", QMessageBox.Ok)
             return
 
+        if self.showing_iso:
+            if self.user['role'] != "Administrateur":
+                QMessageBox.warning(self, "Non autorisé", "Seul l'administrateur peut ajouter un seuil ISO.", QMessageBox.Ok)
+                return
+            dialog = ThresholdForm(self.db)
+            if dialog.exec_() == QDialog.Accepted:
+                data = dialog.get_data()
+                if not data["test_name"]:
+                    QMessageBox.warning(self, "Champs manquants", "Nom du test obligatoire.", QMessageBox.Ok)
+                    return
+                if data["value"] == "":
+                    QMessageBox.warning(self, "Champs manquants", "La valeur du seuil doit être renseignée.", QMessageBox.Ok)
+                    return
+                try:
+                    value = float(data["value"])
+                except ValueError:
+                    QMessageBox.warning(self, "Valeur incorrecte", "La valeur du seuil doit être un nombre.", QMessageBox.Ok)
+                    return
+                if data["test_name"] in ISO_THRESHOLDS[self.selected_iso]:
+                    QMessageBox.warning(self, "Doublon", "Ce test existe déjà pour cet ISO.", QMessageBox.Ok)
+                    return
+                ISO_THRESHOLDS[self.selected_iso][data["test_name"]] = value
+                update_iso_threshold(self.selected_iso, data["test_name"], value)  # CHANGEMENT: écrire dans la base
+                self.show_iso_thresholds()
+            return
+
         dialog = ThresholdForm(self.db)
         if dialog.exec_() == QDialog.Accepted:
             data = dialog.get_data()
             if not data["test_name"]:
                 QMessageBox.warning(self, "Champs manquants", "Nom du test obligatoire.", QMessageBox.Ok)
                 return
-            if data["min_value"] == "" and data["max_value"] == "":
-                QMessageBox.warning(self, "Champs manquants", "Au moins une valeur min ou max doit être renseignée.", QMessageBox.Ok)
+            if data["value"] == "":
+                QMessageBox.warning(self, "Champs manquants", "La valeur du seuil doit être renseignée.", QMessageBox.Ok)
                 return
             try:
-                min_val = float(data["min_value"]) if data["min_value"] else None
-                max_val = float(data["max_value"]) if data["max_value"] else None
+                value = float(data["value"])
             except ValueError:
-                QMessageBox.warning(self, "Valeur incorrecte", "Les valeurs min/max doivent être des nombres.", QMessageBox.Ok)
+                QMessageBox.warning(self, "Valeur incorrecte", "La valeur du seuil doit être un nombre.", QMessageBox.Ok)
                 return
             try:
-                self.manager.add_threshold(None, data["test_name"], min_val, max_val)
+                self.manager.add_threshold(1, data["test_name"], value, None)
                 self.show_custom_thresholds()
             except Exception as e:
                 QMessageBox.critical(self, "Erreur", f"Impossible d’ajouter le seuil : {e}", QMessageBox.Ok)
@@ -326,7 +404,32 @@ class ThresholdsWidget(QWidget):
             return
 
         if self.showing_iso:
-            QMessageBox.warning(self, "Non modifiable", "Les seuils ISO par défaut ne peuvent pas être modifiés.", QMessageBox.Ok)
+            if self.user['role'] != "Administrateur":
+                QMessageBox.warning(self, "Non modifiable", "Les seuils ISO par défaut ne peuvent pas être modifiés.", QMessageBox.Ok)
+                return
+
+            iso_data = ISO_THRESHOLDS[self.selected_iso]
+            test_names = list(iso_data.keys())
+            sel_row = self.table.currentRow()
+            if sel_row < 0 or sel_row >= len(test_names):
+                QMessageBox.warning(self, "Aucun seuil", "Veuillez sélectionner un seuil ISO à modifier.", QMessageBox.Ok)
+                return
+            test_name = test_names[sel_row]
+            valeur = iso_data[test_name]
+            dialog = ThresholdForm(self.db, {"test_name": test_name, "value": valeur})
+            if dialog.exec_() == QDialog.Accepted:
+                data = dialog.get_data()
+                if not data["test_name"]:
+                    QMessageBox.warning(self, "Champs manquants", "Nom du test obligatoire.", QMessageBox.Ok)
+                    return
+                try:
+                    new_val = float(data["value"]) if data["value"] else valeur
+                except ValueError:
+                    QMessageBox.warning(self, "Valeur incorrecte", "La valeur doit être un nombre.", QMessageBox.Ok)
+                    return
+                ISO_THRESHOLDS[self.selected_iso][test_name] = new_val
+                update_iso_threshold(self.selected_iso, test_name, new_val)  # CHANGEMENT: mise à jour base
+                self.show_iso_thresholds()
             return
 
         test_name = self.table.get_selected_test_name()
@@ -346,17 +449,16 @@ class ThresholdsWidget(QWidget):
             if not data["test_name"]:
                 QMessageBox.warning(self, "Champs manquants", "Nom du test obligatoire.", QMessageBox.Ok)
                 return
-            if data["min_value"] == "" and data["max_value"] == "":
-                QMessageBox.warning(self, "Champs manquants", "Au moins une valeur min ou max doit être renseignée.", QMessageBox.Ok)
+            if data["value"] == "":
+                QMessageBox.warning(self, "Champs manquants", "La valeur du seuil doit être renseignée.", QMessageBox.Ok)
                 return
             try:
-                min_val = float(data["min_value"]) if data["min_value"] else None
-                max_val = float(data["max_value"]) if data["max_value"] else None
+                value = float(data["value"])
             except ValueError:
-                QMessageBox.warning(self, "Valeur incorrecte", "Les valeurs min/max doivent être des nombres.", QMessageBox.Ok)
+                QMessageBox.warning(self, "Valeur incorrecte", "La valeur du seuil doit être un nombre.", QMessageBox.Ok)
                 return
             try:
-                self.manager.update_threshold(thresh["id"], None, data["test_name"], min_val, max_val)
+                self.manager.update_threshold(thresh["id"], None, data["test_name"], value, None)
                 self.show_custom_thresholds()
             except Exception as e:
                 QMessageBox.critical(self, "Erreur", f"Impossible de modifier le seuil : {e}", QMessageBox.Ok)
@@ -367,7 +469,24 @@ class ThresholdsWidget(QWidget):
             return
 
         if self.showing_iso:
-            QMessageBox.warning(self, "Non modifiable", "Les seuils ISO par défaut ne peuvent pas être supprimés.", QMessageBox.Ok)
+            if self.user['role'] != "Administrateur":
+                QMessageBox.warning(self, "Non modifiable", "Les seuils ISO par défaut ne peuvent pas être supprimés.", QMessageBox.Ok)
+                return
+
+            iso_data = ISO_THRESHOLDS[self.selected_iso]
+            test_names = list(iso_data.keys())
+            sel_row = self.table.currentRow()
+            if sel_row < 0 or sel_row >= len(test_names):
+                QMessageBox.warning(self, "Aucun seuil", "Veuillez sélectionner un seuil ISO à supprimer.", QMessageBox.Ok)
+                return
+            test_name = test_names[sel_row]
+            confirm = QMessageBox.question(
+                self, "Confirmation", f"Supprimer le seuil ISO '{test_name}' de {self.selected_iso} ?", QMessageBox.Yes | QMessageBox.No
+            )
+            if confirm == QMessageBox.Yes:
+                del ISO_THRESHOLDS[self.selected_iso][test_name]
+                delete_iso_threshold(self.selected_iso, test_name)  # CHANGEMENT: suppression en base
+                self.show_iso_thresholds()
             return
 
         test_name = self.table.get_selected_test_name()
@@ -390,7 +509,6 @@ class ThresholdsWidget(QWidget):
                 self.show_custom_thresholds()
             except Exception as e:
                 QMessageBox.critical(self, "Erreur", f"Impossible de supprimer le seuil : {e}", QMessageBox.Ok)
-
     def refresh_thresholds(self):
         if self.showing_iso:
             self.show_iso_thresholds()
@@ -404,7 +522,7 @@ class ThresholdForm(QDialog):
         self.threshold = threshold
         self.setWindowTitle("Modifier seuil" if threshold else "Nouveau seuil")
         self.setModal(True)
-        self.resize(400, 200)
+        self.resize(400, 150)
         self.setStyleSheet("""
             QDialog { background-color: #f0f0f0; }
             QComboBox, QLineEdit {
@@ -419,22 +537,18 @@ class ThresholdForm(QDialog):
             QPushButton:hover { background-color: #1c5ea3; color: #fff; }
         """)
         self.input_test = QLineEdit()
-        self.input_min = QLineEdit()
-        self.input_min.setPlaceholderText("Optionnel")
-        self.input_max = QLineEdit()
-        self.input_max.setPlaceholderText("Optionnel")
+        self.input_value = QLineEdit()
+        self.input_value.setPlaceholderText("Obligatoire")
 
         if threshold:
             self.input_test.setText(threshold.get("test_name", ""))
-            if threshold.get("min_value") is not None:
-                self.input_min.setText(str(threshold["min_value"]))
-            if threshold.get("max_value") is not None:
-                self.input_max.setText(str(threshold["max_value"]))
+            value = threshold.get("value")
+            if value is not None:
+                self.input_value.setText(str(value))
 
         form = QFormLayout()
         form.addRow("Nom du test :", self.input_test)
-        form.addRow("Valeur min :", self.input_min)
-        form.addRow("Valeur max :", self.input_max)
+        form.addRow("Valeur de seuil :", self.input_value)
 
         self.btn_save = QPushButton("Modifier" if threshold else "Enregistrer")
         self.btn_cancel = QPushButton("Annuler")
@@ -454,6 +568,5 @@ class ThresholdForm(QDialog):
     def get_data(self):
         return {
             "test_name": self.input_test.text().strip(),
-            "min_value": self.input_min.text().strip(),
-            "max_value": self.input_max.text().strip(),
+            "value": self.input_value.text().strip(),
         }

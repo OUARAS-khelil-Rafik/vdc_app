@@ -56,16 +56,14 @@ class Database:
             );
             """)
 
-            # Seuils : on supprime l'ancienne table et on la recrée
-            self.conn.execute("DROP TABLE IF EXISTS thresholds;")
+            # Seuils : table pour les seuils ISO et personnalisés
             self.conn.execute("""
-            CREATE TABLE thresholds (
+            CREATE TABLE IF NOT EXISTS thresholds (
                 id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                project_id   INTEGER NOT NULL,
-                test_name    TEXT    NOT NULL,
-                min_value    REAL,
-                max_value    REAL,
-                FOREIGN KEY(project_id) REFERENCES projects(id)
+                iso_name     TEXT,
+                test_name    TEXT NOT NULL,
+                value        REAL,
+                UNIQUE (iso_name, test_name)
             );
             """)
 
