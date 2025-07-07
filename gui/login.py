@@ -121,23 +121,16 @@ class LoginWindow(QWidget):
 
         user = self.db.authenticate_user(username, password)
         self.input_password.clear()
-        if user and user.get("validate_user") != "Validé":
+        if user is not None:
             from gui.dashboard import DashboardWindow
             self.dashboard = DashboardWindow(self.db, user)
             self.dashboard.show()
             self.close()
-        elif user and user.get("validate_user") == "Validé":
-            QMessageBox.warning(
-                self,
-                "Compte non validé",
-                "Votre compte n'est pas encore validé.",
-                QMessageBox.Ok
-            )
         else:
             QMessageBox.warning(
                 self,
                 "Erreur d’authentification",
-                "Nom d’utilisateur ou mot de passe incorrect.",
+                "Nom d'utilisateur, mot de passe ou validation incorrects.",
                 QMessageBox.Ok
             )
 

@@ -18,11 +18,11 @@ class NoFocusTableWidget(QTableWidget):
 class ProjectTable(NoFocusTableWidget):
     HEADERS = [
         "ID", "Entreprise", "Localisation", "Type de salle", "Date de test",
-        "Classe ISO", "Statut validation", "Utilisateur assigné"
+        "Classe ISO", "Statut validation"
     ]
     COLUMNS = [
         "id", "company_name", "location", "room_type", "test_date",
-        "iso_class", "validation_status", "username"
+        "iso_class", "validation_status"
     ]
 
     def __init__(self, parent=None):
@@ -102,7 +102,6 @@ class ProjectForm(QDialog):
         self.user = user
         self.manager = ProjectManager(db)
         self.project = None
-        self.users_list = self.manager.get_users_for_assignment()  # You need to implement this in ProjectManager
         if isinstance(project, int):
             self.project = self.manager.get_project(project)
         elif project:
@@ -139,8 +138,6 @@ class ProjectForm(QDialog):
         self.input_iso.addItems(self.ISO_CLASSES)
         self.input_status   = QComboBox()
         self.input_status.addItems(self.VALIDATION_STATUSES)
-        self.input_assigned_user = QComboBox()
-        self.input_assigned_user.addItems([u['username'] for u in self.users_list])
 
         # Ajout d'un bouton pour afficher les seuils ISO sélectionnés
         self.btn_show_thresholds = QPushButton("Voir seuils ISO")
@@ -161,13 +158,9 @@ class ProjectForm(QDialog):
             idx_status = self.input_status.findText(status)
             if idx_status >= 0:
                 self.input_status.setCurrentIndex(idx_status)
-            assigned_username = self.project.get("username", "")
-            idx_user = self.input_assigned_user.findText(assigned_username)
-            if idx_user >= 0:
-                self.input_assigned_user.setCurrentIndex(idx_user)
         for widget in [
             self.input_company, self.input_location, self.input_room,
-            self.input_date, self.input_iso, self.input_status, self.input_assigned_user
+            self.input_date, self.input_iso, self.input_status
         ]:
             widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.btn_save   = QPushButton("Modifier" if self.project else "Enregistrer")
@@ -182,7 +175,6 @@ class ProjectForm(QDialog):
         form_layout.addRow("Date du test :",  self.input_date)
         form_layout.addRow("Classe ISO :",    self.input_iso)
         form_layout.addRow("Statut validation :", self.input_status)
-        form_layout.addRow("Utilisateur assigné :", self.input_assigned_user)
         form_layout.addRow("", self.btn_show_thresholds)
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
@@ -213,21 +205,17 @@ class ProjectForm(QDialog):
         date     = self.input_date.date().toString("yyyy-MM-dd")
         iso_class = self.input_iso.currentText()
         validation_status = self.input_status.currentText()
-        assigned_user_idx = self.input_assigned_user.currentIndex()
-        assigned_user_username = self.users_list[assigned_user_idx]['username'] if assigned_user_idx >= 0 else None
-        assigned_user_id = self.users_list[assigned_user_idx]['id'] if assigned_user_idx >= 0 else None
-        if not company or not date or not iso_class or not validation_status or assigned_user_id is None:
-            QMessageBox.warning(self, "Champs manquants", "Le nom de l'entreprise, la date, la classe ISO, le statut et l'utilisateur assigné sont obligatoires.", QMessageBox.Ok)
+
+        if not company or not date or not iso_class or not validation_status:
+            QMessageBox.warning(self, "Champs manquants", "Le nom de l'entreprise, la date, la classe ISO et le statut sont obligatoires.", QMessageBox.Ok)
             return
         try:
             if self.project:
                 self.manager.update_project(
-                    self.project["id"], company, location, room, date, iso_class, validation_status, assigned_user_id
+                    self.project["id"], company, location, room, date, iso_class, validation_status
                 )
             else:
-                self.manager.add_project(
-                    company, location, room, date, self.user['id'], iso_class, validation_status, assigned_user_id
-                )
+                self.manager.add_project(company, location, room, date, iso_class, validation_status)
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Erreur", f"Impossible de {'modifier' if self.project else 'créer'} le projet : {e}", QMessageBox.Ok)
@@ -242,13 +230,13 @@ class ProjectWidget(QWidget):
             QWidget { background-color: #e0e0e0; }
             QTableWidget {
                 background-color: #fff; alternate-background-color: #fff;
-                gridline-color: #1c5ea3; selection-background-color: #b8d5ed;
+                selection-background-color: #b8d5ed;
                 selection-color: #1c5ea3; border: 2px solid #1c5ea3; font-size: 15px;
                 border-radius: 8px;
             }
             QHeaderView::section {
                 background-color: #1c5ea3; color: #fff; font-weight: bold;
-                border: none; padding: 6px; qproperty-alignment: 'AlignCenter | AlignVCenter';
+                border: none; padding: 6px;
             }
             QTableWidget::item {
                 border-bottom: 1px solid #b8d5ed;
@@ -281,21 +269,6 @@ class ProjectWidget(QWidget):
         layout.addWidget(self.table)
         layout.addLayout(btn_layout)
         self.setLayout(layout)
-        
-        # Ajuster la visibilité des boutons selon le rôle
-        role = self.user['role']
-        if role == 'Technicien':
-            self.btn_add.hide()
-            self.btn_edit.hide()
-            self.btn_delete.hide()
-            self.btn_pdf.hide()
-        elif role == 'Technicien premium':
-            self.btn_add.hide()
-            self.btn_edit.hide()
-            self.btn_delete.hide()
-            self.btn_pdf.hide()
-        # Administrateur conserve tous les boutons
-
         self.refresh_projects()
 
     def refresh_projects(self):
@@ -318,7 +291,7 @@ class ProjectWidget(QWidget):
         if project_id is None:
             QMessageBox.warning(self, "Aucun projet", "Veuillez sélectionner un projet à modifier.", QMessageBox.Ok)
             return
-        dialog = ProjectForm(self.db, self.user, project_id)
+        dialog = ProjectForm(self.db, self.user, project=project_id)
         if dialog.exec_() == QDialog.Accepted:
             self.refresh_projects()
 

@@ -11,7 +11,7 @@ class SignupWindow(QWidget):
     def __init__(self, db):
         super().__init__()
         self.setWindowTitle("Technicien - Inscription")
-        self.setFixedSize(350, 380)
+        self.setFixedSize(350, 430)
         self.setWindowFlag(Qt.WindowStaysOnTopHint)
         # Center the window using QScreen
         screen = QApplication.primaryScreen()
@@ -56,20 +56,26 @@ class SignupWindow(QWidget):
         layout.setSpacing(15)
         layout.setContentsMargins(30, 30, 30, 30)
 
-        self.username_label = QLabel("Nom d'utilisateur:")
+        self.fullname_label = QLabel("Nom complet :")
+        self.fullname_input = QLineEdit()
+        self.fullname_input.setPlaceholderText("Entrez votre nom complet")
+        layout.addWidget(self.fullname_label)
+        layout.addWidget(self.fullname_input)
+
+        self.username_label = QLabel("Nom d'utilisateur :")
         self.username_input = QLineEdit()
         self.username_input.setPlaceholderText("Entrez votre nom d'utilisateur")
         layout.addWidget(self.username_label)
         layout.addWidget(self.username_input)
 
-        self.password_label = QLabel("Mot de passe:")
+        self.password_label = QLabel("Mot de passe :")
         self.password_input = QLineEdit()
         self.password_input.setPlaceholderText("Entrez votre mot de passe")
         self.password_input.setEchoMode(QLineEdit.Password)
         layout.addWidget(self.password_label)
         layout.addWidget(self.password_input)
 
-        self.confirm_label = QLabel("Confirmer le mot de passe:")
+        self.confirm_label = QLabel("Confirmer le mot de passe :")
         self.confirm_input = QLineEdit()
         self.confirm_input.setPlaceholderText("Confirmez votre mot de passe")
         self.confirm_input.setEchoMode(QLineEdit.Password)
@@ -102,11 +108,12 @@ class SignupWindow(QWidget):
         self.setLayout(layout)
 
     def handle_signup(self):
+        full_name = self.fullname_input.text().strip()
         username = self.username_input.text().strip()
         password = self.password_input.text()
         confirm = self.confirm_input.text()
 
-        if not username or not password or not confirm:
+        if not full_name or not username or not password or not confirm:
             QMessageBox.warning(self, "Erreur", "Tous les champs sont obligatoires.")
             return
 
@@ -128,8 +135,20 @@ class SignupWindow(QWidget):
             return
 
         try:
-            self.db.create_user(username, password, "Technicien")
-            QMessageBox.information(self, "Succès", "Inscription réussie !")
+            # La colonne validate_user est 'Non validé' par défaut
+            # La colonne role doit être 'Technicien' ici
+            self.db.create_user(
+                username=username,
+                password=password,
+                role="Technicien",
+                full_name=full_name,
+                validate_user="Non validé"
+            )
+            QMessageBox.information(
+                self,
+                "Succès",
+                "Inscription réussie !\nVotre compte doit être validé par un administrateur avant de pouvoir vous connecter."
+            )
             self.open_login()
         except Exception as e:
             if "UNIQUE constraint failed" in str(e):

@@ -9,7 +9,7 @@ class UserManager:
         conn = sqlite3.connect(UserManager.DB_PATH)
         cursor = conn.cursor()
         try:
-            cursor.execute("SELECT id, username, role, validate_user FROM users")
+            cursor.execute("SELECT id, username, full_name, role, validate_user FROM users")
             users = cursor.fetchall()
         except Exception:
             users = []
@@ -32,22 +32,28 @@ class UserManager:
         return exists
 
     @staticmethod
-    def add_user(username, password, role):
+    def add_user(username, password, full_name, role):
         conn = sqlite3.connect(UserManager.DB_PATH)
         cursor = conn.cursor()
         try:
             password_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
-            cursor.execute("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)", (username, password_hash, role))
+            cursor.execute(
+                "INSERT INTO users (username, password_hash, full_name, role) VALUES (?, ?, ?, ?)",
+                (username, password_hash, full_name, role)
+            )
             conn.commit()
         finally:
             conn.close()
 
     @staticmethod
-    def update_user(user_id, username, role):
+    def update_user(user_id, username, full_name, role):
         conn = sqlite3.connect(UserManager.DB_PATH)
         cursor = conn.cursor()
         try:
-            cursor.execute("UPDATE users SET username=?, role=? WHERE id=?", (username, role, user_id))
+            cursor.execute(
+                "UPDATE users SET username=?, full_name=?, role=? WHERE id=?",
+                (username, full_name, role, user_id)
+            )
             conn.commit()
         finally:
             conn.close()

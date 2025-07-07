@@ -34,6 +34,7 @@ class Database:
                 id              INTEGER PRIMARY KEY AUTOINCREMENT,
                 username        TEXT UNIQUE NOT NULL,
                 password_hash   TEXT NOT NULL,
+                full_name       TEXT NOT NULL,
                 role            TEXT NOT NULL
                                  CHECK(role IN ('Administrateur','Technicien','Technicien premium')),
                 validate_user   TEXT NOT NULL DEFAULT 'Non validé'
@@ -49,12 +50,8 @@ class Database:
                 location          TEXT,
                 room_type         TEXT,
                 test_date         TEXT NOT NULL,
-                created_by        INTEGER NOT NULL,
-                username          TEXT NOT NULL,
                 iso_class         TEXT NOT NULL CHECK(iso_class IN ('ISO 1', 'ISO 2', 'ISO 3', 'ISO 4', 'ISO 5', 'ISO 6', 'ISO 7', 'ISO 8', 'ISO 9')),
-                validation_status TEXT NOT NULL DEFAULT 'En attente' CHECK(validation_status IN ('En attente','Validé')),
-                FOREIGN KEY(created_by) REFERENCES users(id),
-                FOREIGN KEY(username) REFERENCES users(id)
+                validation_status TEXT NOT NULL DEFAULT 'En attente' CHECK(validation_status IN ('En attente','Validé'))
             );
             """)
 
@@ -107,6 +104,7 @@ class Database:
     def create_user(self,
                     username: str,
                     password: str,
+                    full_name: str,
                     role: str,
                     validate_user: str = "Non validé") -> int:
         """
@@ -116,28 +114,34 @@ class Database:
         pwd_hash = self._hash_password(password)
         with self.conn:
             cursor = self.conn.execute(
-                "INSERT INTO users (username, password_hash, role, validate_user) "
-                "VALUES (?, ?, ?, ?)",
-                (username, pwd_hash, role, validate_user)
+                "INSERT INTO users (username, password_hash, full_name, role, validate_user) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (username, pwd_hash, full_name, role, validate_user)
             )
             return cursor.lastrowid
 
     def authenticate_user(self,
-                          username: str,
-                          password: str) -> Optional[Dict[str, Any]]:
+                        username: str,
+                        password: str) -> Optional[Dict[str, Any]]:
         """
-        Vérifie les identifiants, et renvoie un dict {id, username, role}
+        Vérifie les identifiants, et renvoie un dict contenant les infos utilisateur
         si OK, ou None sinon. Seuls les utilisateurs validés peuvent se connecter.
         """
         pwd_hash = self._hash_password(password)
         cursor = self.conn.execute(
-            "SELECT id, username, role "
+            "SELECT id, username, full_name, role "
             "FROM users "
             "WHERE username = ? AND password_hash = ? AND validate_user = 'Validé'",
             (username, pwd_hash)
         )
         row = cursor.fetchone()
         if row is not None:
-            return {"id": row["id"], "username": row["username"], "role": row["role"]}
+            return {
+                "id": row["id"],
+                "username": row["username"],
+                "full_name": row["full_name"],
+                "role": row["role"]
+            }
         else:
             return None
+
