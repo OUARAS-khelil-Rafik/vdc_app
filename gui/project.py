@@ -25,6 +25,7 @@ from PyQt5.QtCore import Qt, QDate, QUrl
 from PyQt5.QtGui import QColor, QIcon, QDesktopServices, QIntValidator
 from models.projectmanager import ProjectManager
 from models.utils import dict_from_row        
+from PyQt5.QtWidgets import QLabel
 
 class NoFocusTableWidget(QTableWidget):
     def __init__(self, *args, **kwargs):
@@ -394,7 +395,56 @@ class ProjectWidget(QWidget):
                 border-bottom: 1px solid #b8d5ed;
                 border-right: 1px solid #b8d5ed;
             }
+            QLineEdit, QDateEdit {
+                background: #fff; border: 1px solid #b8d5ed; border-radius: 4px;
+                padding: 4px 8px; font-size: 14px;
+            }
+            QLineEdit:focus, QDateEdit:focus { border: 2px solid #1c5ea3; }
+            QLabel { color: #1c5ea3; font-weight: bold; font-size: 13px; }
         """)
+
+        # --- Filtres ---
+
+        self.filter_company_label = QLabel("Filtrer par entreprise :")
+        self.filter_company_label.setStyleSheet("font-weight: bold; font-size: 15px; color: #1c5ea3; background: transparent;")
+        self.filter_company_text = QLineEdit()
+        self.filter_company_text.setPlaceholderText("Nom de l'entreprise")
+        self.filter_company_text.setToolTip("Filtrer par entreprise")
+        self.filter_company_text.setFixedHeight(28)
+        self.filter_company_text.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        self.filter_start_date_label = QLabel("Date de début :")
+        self.filter_start_date_label.setStyleSheet("font-weight: bold; font-size: 15px; color: #1c5ea3; background: transparent;")
+        self.filter_start_date = QDateEdit(calendarPopup=True)
+        self.filter_start_date.setDisplayFormat("yyyy-MM-dd")
+        self.filter_start_date.setDate(QDate(2024, 1, 1))
+        self.filter_start_date.setToolTip("Date de début")
+        self.filter_start_date.setFixedHeight(28)
+        self.filter_start_date.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        self.filter_end_date_label = QLabel("Date de fin :")
+        self.filter_end_date_label.setStyleSheet("font-weight: bold; font-size: 15px; color: #1c5ea3; background: transparent;")
+        self.filter_end_date = QDateEdit(calendarPopup=True)
+        self.filter_end_date.setDisplayFormat("yyyy-MM-dd")
+        self.filter_end_date.setDate(QDate.currentDate())
+        self.filter_end_date.setToolTip("Date de fin")
+        self.filter_end_date.setFixedHeight(28)
+        self.filter_end_date.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        # Connect filter widgets to refresh_projects for auto-filtering
+        self.filter_company_text.textChanged.connect(self.refresh_projects)
+        self.filter_start_date.dateChanged.connect(self.refresh_projects)
+        self.filter_end_date.dateChanged.connect(self.refresh_projects)
+
+        filter_layout = QHBoxLayout()
+        filter_layout.setSpacing(12)
+        filter_layout.addWidget(self.filter_company_label)
+        filter_layout.addWidget(self.filter_company_text)
+        filter_layout.addWidget(self.filter_start_date_label)
+        filter_layout.addWidget(self.filter_start_date)
+        filter_layout.addWidget(self.filter_end_date_label)
+        filter_layout.addWidget(self.filter_end_date)
+        filter_layout.addStretch()
 
         # Pass user to ProjectTable to control "Actions" column visibility
         self.table = ProjectTable(user=self.user)
@@ -426,13 +476,25 @@ class ProjectWidget(QWidget):
         btn_layout.addStretch()
 
         layout = QVBoxLayout()
+        layout.addLayout(filter_layout)
         layout.addWidget(self.table)
         layout.addLayout(btn_layout)
         self.setLayout(layout)
         self.refresh_projects()
 
     def refresh_projects(self):
-        all_projects = self.manager.get_projects()
+        # Récupérer les valeurs des filtres
+        start_date = self.filter_start_date.date().toString("yyyy-MM-dd")
+        end_date = self.filter_end_date.date().toString("yyyy-MM-dd")
+        company_name = self.filter_company_text.text().strip()
+        if not company_name:
+            company_name = None
+
+        all_projects = self.manager.get_projects(
+            start_date=start_date,
+            end_date=end_date,
+            company_name=None  # On filtre manuellement ci-dessous
+        )
         # Filtrer selon le rôle utilisateur
         if self.user:
             role = self.user.get("role")
@@ -446,6 +508,15 @@ class ProjectWidget(QWidget):
                 ]
         else:
             filtered_projects = all_projects
+
+        # Filtre entreprise : insensible à la casse, mot par mot, commence par
+        if company_name:
+            words = company_name.lower().split()
+            def match_company(row):
+                company = row.get("company_name", "").lower()
+                return all(company.startswith(word) or company.find(f" {word}") != -1 for word in words)
+            filtered_projects = [row for row in filtered_projects if match_company(row)]
+
         self.table.populate(filtered_projects)
         for i in range(self.table.rowCount()):
             for j in range(self.table.columnCount()):
