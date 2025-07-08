@@ -260,11 +260,11 @@ class ThresholdsTable(QTableWidget):
                 alternate-background-color: #b8d5ed;
                 gridline-color: #1c5ea3; 
                 selection-background-color: #b8d5ed;
-                selection-color: #1c5ea3; 
+                selection-color: #1c5ea3;
                 border: 2px solid #1c5ea3; 
                 font-size: 13px;
                 border-radius: 8px;
-                color: #1c5ea3;
+                color: #000;
                 font-weight: bold;
             }
             QHeaderView::section {

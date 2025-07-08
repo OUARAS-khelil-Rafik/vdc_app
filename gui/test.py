@@ -21,28 +21,60 @@ class TestSessionWidget(QWidget):
 
         self.setStyleSheet(self._get_stylesheet())
 
-        self.lbl_proj = QLabel("Projets assignés :")
-        self.combo    = QComboBox()
-        self.combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        # Label for project selection
+        self.lbl_choose = QLabel("Choisit projet :")
+        self.lbl_choose.setStyleSheet("font-weight: bold; font-size: 23px; color: #1c5ea3; background: transparent;")
+
+        self.combo = QComboBox(self)
+        self.combo.setObjectName("projectCombo")
+        self.combo.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.combo.currentIndexChanged.connect(self._on_project_changed)
+        self.combo.setStyleSheet("""
+            QComboBox#projectCombo {
+                background-color: #1c5ea3;
+                color: #fff;
+                border-radius: 8px;
+                font-weight: bold;
+                font-size: 14px;
+                border: none;
+            }
+            QComboBox#projectCombo::drop-down {
+                border: none;
+                background: transparent;
+            }
+            QComboBox#projectCombo QAbstractItemView {
+                background: #fff;
+                color: #1c5ea3;
+                selection-background-color: #b8d5ed;
+                selection-color: #1c5ea3;
+                border-radius: 8px;
+                font-size: 14px;
+            }
+        """)
 
         self.lbl_points = QLabel("Points requis : –")
+        self.lbl_points.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
         self.table = TestSessionTable()
         self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        self.btn_save   = QPushButton("Enregistrer mesures")
-        self.btn_modify = QPushButton("Modifier mesures")
+        self.btn_save   = QPushButton("Enregistrer les mesures")
+        self.btn_modify = QPushButton("Modifier les mesures")
         self.btn_save.setFixedHeight(36)
         self.btn_modify.setFixedHeight(36)
         self.btn_save.clicked.connect(self._save_measurements)
         self.btn_modify.clicked.connect(self._enable_editing)
 
         v = QVBoxLayout(self)
-        v.addWidget(self.lbl_proj)
-        v.addWidget(self.combo)
-        v.addWidget(self.lbl_points)
-        v.addWidget(self.table, stretch=1)  # Make table expand with window
+        # --- Combo and label left-aligned, lbl_points right-aligned in a horizontal layout ---
+        h_combo = QHBoxLayout()
+        h_combo.addWidget(self.lbl_choose)
+        h_combo.addWidget(self.combo)
+        h_combo.addStretch()
+        h_combo.addWidget(self.lbl_points)
+        v.addLayout(h_combo)
+        # -------------------------------------------------
+        v.addWidget(self.table, stretch=1)
         h = QHBoxLayout()
         h.addStretch()
         h.addWidget(self.btn_save)
@@ -56,6 +88,13 @@ class TestSessionWidget(QWidget):
 
     def _get_stylesheet(self):
         return """
+            QWidget {
+                background-color: #f5f7fa;
+            }
+            QLabel {
+                color: #1c5ea3; font-weight: bold; font-size: 15px;
+                background: transparent;
+            }
             TestSessionWidget {
                 background-color: #e0e0e0;
             }
@@ -64,8 +103,27 @@ class TestSessionWidget(QWidget):
                 padding: 8px 24px; font-weight: bold; font-size: 14px;
             }
             QPushButton:hover { background-color: #b8d5ed; color: #1c5ea3; }
-            QLabel {
-                color: #1c5ea3; font-weight: bold; font-size: 15px;
+            QComboBox#projectCombo {
+                background-color: #1c5ea3;
+                color: #fff;
+                border-radius: 8px;
+                padding: 8px 24px;
+                font-weight: bold;
+                font-size: 14px;
+                border: none;
+                min-width: 180px;
+            }
+            QComboBox#projectCombo::drop-down {
+                border: none;
+                background: transparent;
+            }
+            QComboBox#projectCombo QAbstractItemView {
+                background: #fff;
+                color: #1c5ea3;
+                selection-background-color: #b8d5ed;
+                selection-color: #1c5ea3;
+                border-radius: 8px;
+                font-size: 14px;
             }
         """
 
@@ -120,6 +178,13 @@ class TestSessionWidget(QWidget):
             self.table.load_measurements(needed, params, measurements)
         else:
             self.table.init_empty(needed, len(headers))
+
+        # Ajuster la taille de la table à la fenêtre après chaque changement de projet
+        self.table.resizeColumnsToContents()
+        self.table.resizeRowsToContents()
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.table.updateGeometry()
 
     def _enable_editing(self):
         self.btn_modify.hide()
@@ -193,18 +258,19 @@ class TestSessionTable(QTableWidget):
                 alternate-background-color: #fff;
                 gridline-color: #1c5ea3;
                 border: 2px solid #1c5ea3;
+                selection-background-color: #b8d5ed;
+                selection-color: #1c5ea3;
                 font-size: 13px;
                 font-weight: bold;
                 border-radius: 8px;
-                color: #1c5ea3;
+                color: #000;
             }
             QHeaderView::section {
                 background-color: #1c5ea3; color: #fff; font-weight: bold;
                 border: none; padding: 6px; qproperty-alignment: 'AlignCenter | AlignVCenter';
             }
             QTableWidget::item {
-                border-bottom: 1px solid #b8d5ed;
-                border-right: 1px solid #b8d5ed;
+                border: none;
                 background: #fff;
             }
             QLineEdit {
@@ -213,10 +279,12 @@ class TestSessionTable(QTableWidget):
                 font-size: 13px;
                 font-weight: bold;
                 qproperty-alignment: 'AlignCenter | AlignVCenter';
+                border: none;
             }
             QLineEdit:read-only {
                 background-color: #fff;
-                color: #1c5ea3;
+                color: #000;
+                border: none;
             }
         """
 
