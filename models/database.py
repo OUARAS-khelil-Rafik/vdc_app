@@ -47,6 +47,7 @@ class Database:
                 company_name      TEXT NOT NULL,
                 location          TEXT,
                 room_type         TEXT,
+                cleanroom_area    INTEGER CHECK(cleanroom_area >= 0),
                 test_date         TEXT NOT NULL,
                 iso_class         TEXT NOT NULL CHECK(iso_class IN ('ISO 1', 'ISO 2', 'ISO 3', 'ISO 4', 'ISO 5', 'ISO 6', 'ISO 7', 'ISO 8', 'ISO 9')),
                 validation_status TEXT NOT NULL DEFAULT 'En attente' CHECK(validation_status IN ('En attente','Validé')),

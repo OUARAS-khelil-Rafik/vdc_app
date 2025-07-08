@@ -9,7 +9,9 @@ class ProjectManager:
     def get_projects(self):
         cursor = self.db.conn.cursor()
         cursor.execute("""
-            SELECT p.id, p.company_name, p.location, p.room_type, p.test_date,
+            SELECT p.id, p.company_name, p.location, p.room_type, 
+                p.cleanroom_area,  -- colonne corrigée
+                p.test_date,
                 p.iso_class, p.validation_status,
                 u.full_name AS assigned_user
             FROM projects p
@@ -18,15 +20,18 @@ class ProjectManager:
         """)
         rows = cursor.fetchall()
         return [dict_from_row(row, [
-            "id", "company_name", "location", "room_type", "test_date",
+            "id", "company_name", "location", "room_type", 
+            "cleanroom_area",  # colonne corrigée
+            "test_date",
             "iso_class", "validation_status", "assigned_user"
         ]) for row in rows]
-
 
     def get_project(self, project_id):
         cursor = self.db.conn.cursor()
         cursor.execute("""
-            SELECT p.id, p.company_name, p.location, p.room_type, p.test_date,
+            SELECT p.id, p.company_name, p.location, p.room_type, 
+                p.cleanroom_area,  -- colonne corrigée
+                p.test_date,
                 p.iso_class, p.validation_status, p.assigned_to,
                 u.full_name AS assigned_user
             FROM projects p
@@ -36,30 +41,29 @@ class ProjectManager:
         row = cursor.fetchone()
         if row:
             return dict_from_row(row, [
-                "id", "company_name", "location", "room_type", "test_date",
+                "id", "company_name", "location", "room_type", 
+                "cleanroom_area",  # colonne corrigée
+                "test_date",
                 "iso_class", "validation_status", "assigned_to", "assigned_user"
             ])
         return None
 
-
-    def add_project(self, company, location, room, date, iso_class, validation_status, assigned_to):
+    def add_project(self, company, location, room, cleanroom_area, date, iso_class, validation_status, assigned_to):
         cursor = self.db.conn.cursor()
         cursor.execute("""
-            INSERT INTO projects (company_name, location, room_type, test_date, iso_class, validation_status, assigned_to)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (company, location, room, date, iso_class, validation_status, assigned_to))
+            INSERT INTO projects (company_name, location, room_type, cleanroom_area, test_date, iso_class, validation_status, assigned_to)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (company, location, room, cleanroom_area, date, iso_class, validation_status, assigned_to))
         self.db.conn.commit()
 
-
-    def update_project(self, project_id, company, location, room, date, iso_class, validation_status, assigned_to):
+    def update_project(self, project_id, company, location, room, cleanroom_area, date, iso_class, validation_status, assigned_to):
         cursor = self.db.conn.cursor()
         cursor.execute("""
             UPDATE projects
-            SET company_name=?, location=?, room_type=?, test_date=?, iso_class=?, validation_status=?, assigned_to=?
+            SET company_name=?, location=?, room_type=?, cleanroom_area=?, test_date=?, iso_class=?, validation_status=?, assigned_to=?
             WHERE id=?
-        """, (company, location, room, date, iso_class, validation_status, assigned_to, project_id))
+        """, (company, location, room, cleanroom_area, date, iso_class, validation_status, assigned_to, project_id))
         self.db.conn.commit()
-
 
     def delete_project(self, project_id):
         cursor = self.db.conn.cursor()

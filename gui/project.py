@@ -22,7 +22,7 @@ from PyQt5.QtWidgets import (
     QComboBox
 )
 from PyQt5.QtCore import Qt, QDate, QUrl
-from PyQt5.QtGui import QColor, QIcon, QDesktopServices
+from PyQt5.QtGui import QColor, QIcon, QDesktopServices, QIntValidator
 from models.projectmanager import ProjectManager
 from models.utils import dict_from_row        
 
@@ -33,11 +33,11 @@ class NoFocusTableWidget(QTableWidget):
 
 class ProjectTable(NoFocusTableWidget):
     HEADERS = [
-        "Entreprise", "Localisation", "Type de salle", "Date de test",
-        "Classe ISO", "Statut validation", "Responsable", "Actions"
+        "Entreprise", "Localisation", "Salle", "Surface (m²)", "Date de test",
+        "Classe ISO", "Statut", "Responsable", "Actions"
     ]
     COLUMNS = [
-        "company_name", "location", "room_type", "test_date",
+        "company_name", "location", "room_type", "cleanroom_area", "test_date",
         "iso_class", "validation_status", "assigned_user"
     ]
 
@@ -80,7 +80,14 @@ class ProjectTable(NoFocusTableWidget):
         for i, row in enumerate(rows):
             row = dict_from_row(row, self.COLUMNS + ['id', 'validation_status'])
             for col, key in enumerate(self.COLUMNS):
-                item = QTableWidgetItem(str(row.get(key, "")))
+                value = row.get(key, "")
+                if key == "cleanroom_area":
+                    # Affiche comme entier naturel, pas de virgule
+                    try:
+                        value = str(int(float(value)))
+                    except Exception:
+                        value = ""
+                item = QTableWidgetItem(str(value))
                 item.setTextAlignment(Qt.AlignCenter)
                 item.setBackground(QColor(Qt.white))
                 if col == 0:
@@ -224,6 +231,8 @@ class ProjectForm(QDialog):
         self.input_company  = QLineEdit()
         self.input_location = QLineEdit()
         self.input_room     = QLineEdit()
+        self.input_surface  = QLineEdit()
+        self.input_surface.setValidator(QIntValidator(0, 1000000))
         self.input_date     = QDateEdit(calendarPopup=True)
         self.input_date.setDate(QDate.currentDate())
         self.input_iso      = QComboBox()
@@ -246,7 +255,6 @@ class ProjectForm(QDialog):
                     self.input_assigned_to.setCurrentIndex(idx)
                     break
 
-
         # Ajout d'un bouton pour afficher les seuils ISO sélectionnés
         self.btn_show_thresholds = QPushButton("Voir seuils ISO")
         self.btn_show_thresholds.clicked.connect(self.show_iso_thresholds_dialog)
@@ -255,6 +263,7 @@ class ProjectForm(QDialog):
             self.input_company.setText(self.project.get("company_name", ""))
             self.input_location.setText(self.project.get("location", ""))
             self.input_room.setText(self.project.get("room_type", ""))
+            self.input_surface.setText(str(self.project.get("cleanroom_area", "")))
             date = QDate.fromString(self.project.get("test_date", ""), "yyyy-MM-dd")
             if date.isValid():
                 self.input_date.setDate(date)
@@ -267,7 +276,7 @@ class ProjectForm(QDialog):
             if idx_status >= 0:
                 self.input_status.setCurrentIndex(idx_status)
         for widget in [
-            self.input_company, self.input_location, self.input_room,
+            self.input_company, self.input_location, self.input_room, self.input_surface,
             self.input_date, self.input_iso, self.input_status
         ]:
             widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -279,10 +288,11 @@ class ProjectForm(QDialog):
         form_layout.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         form_layout.addRow("Entreprise :",    self.input_company)
         form_layout.addRow("Localisation :",  self.input_location)
-        form_layout.addRow("Type de salle :", self.input_room)
+        form_layout.addRow("Salle :", self.input_room)
+        form_layout.addRow("Surface (m²) :", self.input_surface)
         form_layout.addRow("Date du test :",  self.input_date)
         form_layout.addRow("Classe ISO :",    self.input_iso)
-        form_layout.addRow("Statut validation :", self.input_status)
+        form_layout.addRow("Statut :", self.input_status)
         form_layout.addRow("Responsable du projet :", self.input_assigned_to)
         form_layout.addRow("", self.btn_show_thresholds)
         btn_layout = QHBoxLayout()
@@ -311,21 +321,23 @@ class ProjectForm(QDialog):
         company  = self.input_company.text().strip()
         location = self.input_location.text().strip()
         room     = self.input_room.text().strip()
+        surface  = self.input_surface.text().strip()
         date     = self.input_date.date().toString("yyyy-MM-dd")
         iso_class = self.input_iso.currentText()
         validation_status = self.input_status.currentText()
         assigned_to = self.input_assigned_to.currentData()
 
-        if not company or not date or not iso_class or not validation_status:
-            QMessageBox.warning(self, "Champs manquants", "Le nom de l'entreprise, la date, la classe ISO et le statut sont obligatoires.", QMessageBox.Ok)
+        if not company or not date or not iso_class or not validation_status or not surface:
+            QMessageBox.warning(self, "Champs manquants", "Le nom de l'entreprise, la date, la classe ISO, la surface et le statut sont obligatoires.", QMessageBox.Ok)
             return
         try:
+            surface_int = int(surface)
             if self.project:
                 self.manager.update_project(
-                    self.project["id"], company, location, room, date, iso_class, validation_status, assigned_to
+                    self.project["id"], company, location, room, surface_int, date, iso_class, validation_status, assigned_to
                 )
             else:
-                self.manager.add_project(company, location, room, date, iso_class, validation_status, assigned_to)
+                self.manager.add_project(company, location, room, surface_int, date, iso_class, validation_status, assigned_to)
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Erreur", f"Impossible de {'modifier' if self.project else 'créer'} le projet : {e}", QMessageBox.Ok)
