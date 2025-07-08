@@ -1,1 +1,1 @@
-# -vdc_app
+# vdc_app
