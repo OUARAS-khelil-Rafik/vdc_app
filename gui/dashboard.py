@@ -18,7 +18,7 @@ from .login       import LoginWindow
 from .project     import ProjectWidget
 from .thresholds  import ThresholdsWidget
 from .users       import UsersWidget
-from .test        import TestSessionWidget   # Utilise TestSessionWidget
+from .test        import TestSessionWidget
 
 class DashboardToolbar(QToolBar):
     def __init__(self, user, parent=None):
@@ -68,7 +68,7 @@ class DashboardWindow(QMainWindow):
 
     def _init_ui(self):
         self.setWindowTitle("VDC Engineering – Tableau de bord")
-        self.setMinimumSize(900, 600)
+        self.setMinimumSize(1000, 600)
         self.setStyleSheet("""
             QMainWindow, QWidget { background-color: #e0e0e0; }
             QLabel#welcomeLabel {

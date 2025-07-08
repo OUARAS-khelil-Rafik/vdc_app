@@ -262,8 +262,10 @@ class ThresholdsTable(QTableWidget):
                 selection-background-color: #b8d5ed;
                 selection-color: #1c5ea3; 
                 border: 2px solid #1c5ea3; 
-                font-size: 15px;
+                font-size: 13px;
                 border-radius: 8px;
+                color: #1c5ea3;
+                font-weight: bold;
             }
             QHeaderView::section {
                 background-color: #1c5ea3; color: #fff; font-weight: bold;
@@ -283,18 +285,26 @@ class ThresholdsTable(QTableWidget):
         for seuil, valeur in iso_data.items():
             row = self.rowCount()
             self.insertRow(row)
-            self.setItem(row, 0, QTableWidgetItem(seuil))
-            self.setItem(row, 1, QTableWidgetItem(str(valeur)))
+            item_seuil = QTableWidgetItem(seuil)
+            item_seuil.setTextAlignment(Qt.AlignCenter)
+            item_valeur = QTableWidgetItem(str(valeur))
+            item_valeur.setTextAlignment(Qt.AlignCenter)
+            self.setItem(row, 0, item_seuil)
+            self.setItem(row, 1, item_valeur)
 
     def populate_custom(self, rows):
         self.setRowCount(0)
         for row in rows:
             idx = self.rowCount()
             self.insertRow(idx)
-            self.setItem(idx, 0, QTableWidgetItem(row.get("test_name", "")))
+            item_test = QTableWidgetItem(row.get("test_name", ""))
+            item_test.setTextAlignment(Qt.AlignCenter)
             value = row.get("value")
             seuil_str = str(value) if value is not None else ""
-            self.setItem(idx, 1, QTableWidgetItem(seuil_str))
+            item_valeur = QTableWidgetItem(seuil_str)
+            item_valeur.setTextAlignment(Qt.AlignCenter)
+            self.setItem(idx, 0, item_test)
+            self.setItem(idx, 1, item_valeur)
 
     def get_selected_test_name(self):
         sel = self.currentRow()

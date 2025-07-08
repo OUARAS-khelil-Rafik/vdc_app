@@ -62,8 +62,10 @@ class ProjectTable(NoFocusTableWidget):
                 selection-background-color: #b8d5ed;
                 selection-color: #1c5ea3; 
                 border: 2px solid #1c5ea3; 
-                font-size: 15px;
+                font-size: 13px;
                 border-radius: 8px;
+                color: #1c5ea3;
+                font-weight: bold;
             }
             QHeaderView::section {
                 background-color: #1c5ea3; color: #fff; font-weight: bold;
