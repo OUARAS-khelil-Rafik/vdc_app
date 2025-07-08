@@ -1,172 +1,189 @@
+# gui/test.py
+
 from PyQt5.QtWidgets import (
-    QWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QHBoxLayout,
-    QMessageBox, QDialog, QHeaderView, QSizePolicy, QPushButton, QFormLayout, QLineEdit
+    QWidget, QLabel, QVBoxLayout, QHBoxLayout,
+    QComboBox, QPushButton, QTableWidget, QTableWidgetItem,
+    QLineEdit, QMessageBox, QHeaderView
 )
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor
+from datetime import datetime
 
-class TestsTable(QTableWidget):
-    HEADERS = ["ID", "Nom du test"]
-    COLUMNS = ["id", "name"]
+from models.projectmanager import ProjectManager
+from models.testmanager    import TestManager
 
-    def __init__(self, db, parent=None):
-        super().__init__(parent)
-        self.db = db
-        self.setColumnCount(len(self.HEADERS))
-        self.setHorizontalHeaderLabels(self.HEADERS)
-        self.setSelectionBehavior(self.SelectRows)
-        self.setSelectionMode(self.ExtendedSelection)
-        self.setEditTriggers(self.NoEditTriggers)
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.setMinimumHeight(200)
-        self.verticalHeader().setVisible(False)
-        self.horizontalHeader().setDefaultAlignment(Qt.AlignCenter | Qt.AlignVCenter)
-        self.setStyleSheet("")
-
-    def populate(self, rows):
-        self.setRowCount(len(rows))
-        for i, row in enumerate(rows):
-            for col, key in enumerate(self.COLUMNS):
-                text = str(row.get(key, ""))
-                item = QTableWidgetItem(text)
-                item.setTextAlignment(Qt.AlignCenter)
-                item.setBackground(QColor(Qt.white))
-                if col == 0:
-                    item.setData(Qt.UserRole, row.get("id"))
-                self.setItem(i, col, item)
-        self.hideColumn(0)
-        self.resizeColumnsToContents()
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-
-    def get_selected_test_id(self):
-        sel = self.currentRow()
-        if sel < 0:
-            return None
-        return self.item(sel, 0).data(Qt.UserRole)
-
-class TestForm(QDialog):
-    def __init__(self, db, test=None, parent=None):
-        super().__init__(parent)
-        self.db = db
-        self.test = test
-        self.setWindowTitle("Modifier test" if test else "Nouveau test")
-        self.setModal(True)
-        self.resize(300, 120)
-        self.setStyleSheet("")
-        self.input_name = QLineEdit()
-        if test:
-            self.input_name.setText(test.get("name", ""))
-        form = QFormLayout()
-        form.addRow("Nom du test :", self.input_name)
-        self.btn_save = QPushButton("Edit" if test else "Save")
-        self.btn_cancel = QPushButton("Annuler")
-        self.btn_save.clicked.connect(self.accept)
-        self.btn_cancel.clicked.connect(self.reject)
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        btn_layout.addWidget(self.btn_save)
-        btn_layout.addWidget(self.btn_cancel)
-        main_layout = QVBoxLayout()
-        main_layout.addLayout(form)
-        main_layout.addLayout(btn_layout)
-        self.setLayout(main_layout)
-
-    def get_data(self):
-        return {"name": self.input_name.text().strip()}
-
-class TestsWidget(QWidget):
+class TestSessionWidget(QWidget):
     def __init__(self, db, user, parent=None):
         super().__init__(parent)
-        self.db = db
+        self.db   = db
         self.user = user
-        self.setStyleSheet("")
-        self.table = TestsTable(self.db)
-        self.table.setFocusPolicy(Qt.NoFocus)
-        self.btn_add = QPushButton("Add Test")
-        self.btn_edit = QPushButton("Edit Test")
-        self.btn_delete = QPushButton("Delete Test")
-        self.btn_add.clicked.connect(self.add_test)
-        self.btn_edit.clicked.connect(self.edit_test)
-        self.btn_delete.clicked.connect(self.delete_test)
-        btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
-        btn_layout.addWidget(self.btn_add)
-        btn_layout.addWidget(self.btn_edit)
-        btn_layout.addWidget(self.btn_delete)
-        btn_layout.addStretch()
-        layout = QVBoxLayout()
-        layout.addWidget(self.table)
-        layout.addLayout(btn_layout)
-        self.setLayout(layout)
-        if self.user['role'] not in ("Administrator", "Premium Technician"):
-            self.btn_add.hide()
-            self.btn_edit.hide()
-            self.btn_delete.hide()
-        self.refresh_tests()
+        self.pm   = ProjectManager(db)
+        self.tm   = TestManager(db)
+        self.current_test_id = None
 
-    def refresh_tests(self):
-        rows = self.db.conn.execute("PRAGMA table_info(tests)").fetchall()
-        column_names = [col[1] for col in rows]
-        display_name = "name" if "name" in column_names else column_names[1] if len(column_names) > 1 else ""
-        rows = self.db.conn.execute(f"SELECT id, {display_name} FROM tests").fetchall()
-        # Convert to dict for compatibility with populate
-        dict_rows = []
-        for row in rows:
-            dict_rows.append({"id": row[0], "name": row[1]})
-        self.table.populate(dict_rows)
+        # Sélecteur de projet
+        self.lbl_proj = QLabel("Projets assignés :")
+        self.combo    = QComboBox()
+        self.combo.currentIndexChanged.connect(self._on_project_changed)
 
-    def add_test(self):
-        dialog = TestForm(self.db)
-        if dialog.exec_() == QDialog.Accepted:
-            data = dialog.get_data()
-            if not data["name"]:
-                QMessageBox.warning(self, "Missing Fields", "Test name is required.", QMessageBox.Ok)
-                return
-            try:
-                self.db.conn.execute("INSERT INTO tests (name) VALUES (?)", (data["name"],))
-                self.db.conn.commit()
-                self.refresh_tests()
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Unable to add test: {e}", QMessageBox.Ok)
-    
-    def edit_test(self):
-        tid = self.table.get_selected_test_id()
-        if tid is None:
-            QMessageBox.warning(self, "No Test Selected", "Please select a test to edit.", QMessageBox.Ok)
-            return
-        test = self.db.conn.execute("SELECT * FROM tests WHERE id = ?", (tid,)).fetchone()
-        if not test:
-            QMessageBox.warning(self, "Error", "Test not found.", QMessageBox.Ok)
-            return
-        # Convert sqlite3.Row to dict if needed
-        test_dict = dict(test)
-        dialog = TestForm(self.db, test_dict)
-        if dialog.exec_() == QDialog.Accepted:
-            data = dialog.get_data()
-            if not data["name"]:
-                QMessageBox.warning(self, "Missing Fields", "Test name is required.", QMessageBox.Ok)
-                return
-            try:
-                self.db.conn.execute("UPDATE tests SET name = ? WHERE id = ?", (data["name"], tid))
-                self.db.conn.commit()
-                self.refresh_tests()
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Unable to edit test: {e}", QMessageBox.Ok)
+        # Info points requis
+        self.lbl_points = QLabel("Points requis : –")
 
-    def delete_test(self):
-        tid = self.table.get_selected_test_id()
-        if tid is None:
-            QMessageBox.warning(self, "No Test Selected", "Please select a test to delete.", QMessageBox.Ok)
+        # Tableau de saisie
+        self.table = QTableWidget()
+        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+        # Boutons
+        self.btn_save   = QPushButton("Enregistrer mesures")
+        self.btn_modify = QPushButton("Modifier mesures")
+        self.btn_save.clicked.connect(self._save_measurements)
+        self.btn_modify.clicked.connect(self._enable_editing)
+
+        # Layout
+        v = QVBoxLayout(self)
+        v.addWidget(self.lbl_proj)
+        v.addWidget(self.combo)
+        v.addWidget(self.lbl_points)
+        v.addWidget(self.table)
+        h = QHBoxLayout()
+        h.addWidget(self.btn_save)
+        h.addWidget(self.btn_modify)
+        v.addLayout(h)
+
+        self.btn_modify.hide()
+
+        # Initialisation
+        self.refresh()
+
+    def refresh(self):
+        """
+        Recharge la liste des projets et reconstruit le tableau
+        (appelé à l'ouverture de l'onglet pour préserver les valeurs).
+        """
+        self.current_test_id = None
+        self.btn_modify.hide()
+        self.btn_save.show()
+
+        # 1) Charge projets
+        all_p = self.pm.get_projects()
+        if self.user['role'] == 'Administrateur':
+            self.projects = all_p
+        else:
+            self.projects = [p for p in all_p if p.get("assigned_to") == self.user["id"]]
+
+        self.combo.blockSignals(True)
+        self.combo.clear()
+        for p in self.projects:
+            label = f"{p['company_name']} – {p['room_type']} ({p['cleanroom_area']} m²)"
+            self.combo.addItem(label, p["id"])
+        self.combo.blockSignals(False)
+
+        # 2) Reconstruit le tableau pour le projet sélectionné (index courant)
+        self._on_project_changed(self.combo.currentIndex())
+
+    def _on_project_changed(self, idx):
+        # même logique qu'avant
+        self.current_test_id = None
+        self.btn_modify.hide()
+        self.btn_save.show()
+
+        if idx < 0 or idx >= len(self.projects):
             return
-        confirm = QMessageBox.question(
-            self, "Confirmation", "Delete this test permanently?", QMessageBox.Yes | QMessageBox.No
-        )
-        if confirm == QMessageBox.Yes:
-            try:
-                self.db.conn.execute("DELETE FROM tests WHERE id = ?", (tid,))
-                self.db.conn.commit()
-                self.refresh_tests()
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Unable to delete test: {e}", QMessageBox.Ok)
+
+        project_id = self.combo.itemData(idx)
+        proj       = self.projects[idx]
+        area       = proj["cleanroom_area"]
+        iso_class  = proj["iso_class"]
+
+        needed = self.tm.get_required_points(project_id)
+        self.lbl_points.setText(f"Surface = {area} m² • {needed} points requis")
+
+        # Paramètres ISO
+        rows = self.db.conn.execute(
+            "SELECT test_name FROM thresholds WHERE iso_name = ?", (iso_class,)
+        ).fetchall()
+        params = [r["test_name"] for r in rows]
+
+        # Préparation du tableau
+        headers = ["Point"] + params
+        self.table.setColumnCount(len(headers))
+        self.table.setHorizontalHeaderLabels(headers)
+        self.table.setRowCount(needed)
+
+        # Charger session existante si présente
+        session = self.tm.get_latest_test(project_id, self.user["id"])
+        if session:
+            self.current_test_id = session["id"]
+            measurements = self.tm.get_measurements(self.current_test_id)
+            mmap = {(m["point_name"], m["parameter"]): m for m in measurements}
+            for r in range(needed):
+                pt = f"Point {r+1}"
+                item = QTableWidgetItem(pt)
+                item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                self.table.setItem(r, 0, item)
+                for c, param in enumerate(params, start=1):
+                    m = mmap.get((pt, param))
+                    le = QLineEdit(str(m["value"]) if m else "")
+                    le.setProperty("measurement_id", m["id"] if m else None)
+                    le.setReadOnly(True)
+                    self.table.setCellWidget(r, c, le)
+            if session["is_validated"] == 0:
+                self.btn_modify.show()
+            else:
+                self.btn_save.hide()
+        else:
+            # pas de session => vide
+            for r in range(needed):
+                item = QTableWidgetItem(f"Point {r+1}")
+                item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                self.table.setItem(r, 0, item)
+                for c in range(1, len(headers)):
+                    le = QLineEdit()
+                    le.setPlaceholderText("Valeur")
+                    self.table.setCellWidget(r, c, le)
+
+    def _enable_editing(self):
+        self.btn_modify.hide()
+        self.btn_save.show()
+        for r in range(self.table.rowCount()):
+            for c in range(1, self.table.columnCount()):
+                w = self.table.cellWidget(r, c)
+                w.setReadOnly(False)
+
+    def _save_measurements(self):
+        idx = self.combo.currentIndex()
+        if idx < 0:
+            QMessageBox.warning(self, "Erreur", "Aucun projet sélectionné.", QMessageBox.Ok)
+            return
+        project_id = self.combo.itemData(idx)
+        tech_id    = self.user["id"]
+
+        headers = [self.table.horizontalHeaderItem(c).text()
+                   for c in range(self.table.columnCount())]
+        measurements = []
+        for r in range(self.table.rowCount()):
+            pt = self.table.item(r, 0).text()
+            for c, param in enumerate(headers[1:], start=1):
+                le = self.table.cellWidget(r, c)
+                txt = le.text().strip()
+                if not txt:
+                    QMessageBox.warning(
+                        self, "Champs manquants",
+                        f"Mesure manquante pour {pt} → {param}", QMessageBox.Ok)
+                    return
+                try:
+                    val = float(txt)
+                except ValueError:
+                    QMessageBox.warning(
+                        self, "Valeur incorrecte",
+                        f"Valeur non numérique pour {pt} → {param}", QMessageBox.Ok)
+                    return
+                measurements.append((pt, param, val))
+
+        session_name = f"Session {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        payload = [(param, val, None, None) for _, param, val in measurements]
+        self.tm.save_test(project_id, tech_id, session_name, payload)
+
+        QMessageBox.information(self, "Succès", "Mesures enregistrées !", QMessageBox.Ok)
+        self.btn_save.hide()
+        self.btn_modify.show()
+        # ne pas vider : on reste sur les valeurs enregistrées

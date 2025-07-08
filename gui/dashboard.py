@@ -2,25 +2,27 @@
 
 """
 Tableau de bord principal de l’application VDC Engineering MVP.
-Affiche la liste des projets et propose les fonctionnalités disponibles selon le rôle de l’utilisateur (Administrateur, Technicien, Technicien premium).
+Affiche la liste des projets et propose les fonctionnalités disponibles
+selon le rôle de l’utilisateur (Administrateur, Technicien, Technicien premium).
+Intègre le widget de saisie de tests ISO (TestSessionWidget).
 """
 
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QLabel, QVBoxLayout,
-    QHBoxLayout, QSizePolicy, QToolBar, QAction,
+    QSizePolicy, QToolBar, QAction
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
-from .login import LoginWindow
-from .project import ProjectWidget
-from .thresholds import ThresholdsWidget
-from .users import UsersWidget
-from .test import TestsWidget
 
+from .login       import LoginWindow
+from .project     import ProjectWidget
+from .thresholds  import ThresholdsWidget
+from .users       import UsersWidget
+from .test        import TestSessionWidget   # Utilise TestSessionWidget
 
 class DashboardToolbar(QToolBar):
     def __init__(self, user, parent=None):
-        _ = user  # Mark user as used to avoid linter warning
+        _ = user  # éviter l’avertissement linter
         super().__init__("Tableau de bord", parent)
         self.setMovable(False)
         self.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
@@ -35,32 +37,32 @@ class DashboardToolbar(QToolBar):
             }
         """)
         self.actions_dict = {
-            'projects': QAction(QIcon("icons/projects.png"), "Projets", self),
-            'tests': QAction(QIcon("icons/tests.png"), "Tests", self),
-            'thresholds': QAction(QIcon("icons/thresholds.png"), "Seuils", self),
-            'users': QAction(QIcon("icons/users.png"), "Utilisateurs", self),
-            'logout': QAction(QIcon("icons/logout.png"), "Déconnexion", self)
+            'projects':   QAction(QIcon("icons/projects.png"),   "Projets",      self),
+            'tests':      QAction(QIcon("icons/tests.png"),      "Tests",        self),
+            'thresholds': QAction(QIcon("icons/thresholds.png"), "Seuils",       self),
+            'users':      QAction(QIcon("icons/users.png"),      "Utilisateurs", self),
+            'logout':     QAction(QIcon("icons/logout.png"),     "Déconnexion",   self)
         }
-        for action in self.actions_dict.values():
-            action.setIconText(action.text())
-            action.setText("")
+        for act in self.actions_dict.values():
+            act.setIconText(act.text())
+            act.setText("")
 
-        self.spacer_left = QWidget()
-        self.spacer_left.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        self.spacer_right = QWidget()
-        self.spacer_right.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        spacer_l = QWidget()
+        spacer_l.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        spacer_r = QWidget()
+        spacer_r.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
-        self.addWidget(self.spacer_left)
-        for key in ['projects', 'tests', 'thresholds', 'users']:
+        self.addWidget(spacer_l)
+        for key in ('projects','tests','thresholds','users'):
             self.addAction(self.actions_dict[key])
         self.addSeparator()
         self.addAction(self.actions_dict['logout'])
-        self.addWidget(self.spacer_right)
+        self.addWidget(spacer_r)
 
 class DashboardWindow(QMainWindow):
     def __init__(self, db, user):
         super().__init__()
-        self.db = db
+        self.db   = db
         self.user = user
         self._init_ui()
 
@@ -79,10 +81,12 @@ class DashboardWindow(QMainWindow):
             }
             QToolButton:hover { color: #b8d5ed; }
         """)
+
+        # Barre d'outils
         self.toolbar = DashboardToolbar(self.user)
         self.addToolBar(Qt.TopToolBarArea, self.toolbar)
 
-        # Connect actions based on role
+        # Connecte les actions
         self.toolbar.actions_dict['projects'].triggered.connect(self.show_projects)
         self.toolbar.actions_dict['tests'].triggered.connect(self.show_tests)
         if self.user.get('role') in ('Administrateur', 'Technicien premium'):
@@ -92,62 +96,72 @@ class DashboardWindow(QMainWindow):
             self.toolbar.actions_dict['thresholds'].setVisible(False)
         self.toolbar.actions_dict['logout'].triggered.connect(self.logout)
 
-        # Only Administrateur can see and use "Utilisateurs"
         if self.user.get('role', '').lower() == 'administrateur':
             self.toolbar.actions_dict['users'].setVisible(True)
             self.toolbar.actions_dict['users'].triggered.connect(self.show_users)
         else:
             self.toolbar.actions_dict['users'].setVisible(False)
 
+        # Conteneur central
         self.central = QWidget()
         self.central_layout = QVBoxLayout(self.central)
         self.setCentralWidget(self.central)
-        self.welcome = QLabel(f"Bonjour {self.user.get('full_name', '')} ({self.user.get('role', '')})")
+
+        # Message de bienvenue
+        self.welcome = QLabel(f"Bonjour {self.user.get('full_name','')} ({self.user.get('role','')})")
         self.welcome.setObjectName("welcomeLabel")
         self.welcome.setAlignment(Qt.AlignCenter)
         self.central_layout.addWidget(self.welcome)
 
+        # Zone de contenu
         self.content_widget = QWidget()
         self.content_layout = QVBoxLayout(self.content_widget)
         self.central_layout.addWidget(self.content_widget)
 
-        self.project_widget = ProjectWidget(self.db, self.user)
-        self.tests_widget = TestsWidget(self.db, self.user)
-        self.users_widget = UsersWidget(self.db)
+        # Instanciation des widgets
+        self.project_widget    = ProjectWidget(self.db, self.user)
+        self.tests_widget      = TestSessionWidget(self.db, self.user)
         self.thresholds_widget = ThresholdsWidget(self.db, self.user)
-        self.content_layout.addWidget(self.project_widget)
-        self.content_layout.addWidget(self.tests_widget)
-        self.content_layout.addWidget(self.users_widget)
-        self.content_layout.addWidget(self.thresholds_widget)
+        self.users_widget      = UsersWidget(self.db)
+
+        # Ajout au layout
+        for w in (self.project_widget,
+                  self.tests_widget,
+                  self.thresholds_widget,
+                  self.users_widget):
+            self.content_layout.addWidget(w)
+
+        # Affiche l'onglet Projets au démarrage
         self.show_projects()
 
     def show_projects(self):
         self.project_widget.refresh_projects()
         self.project_widget.show()
         self.tests_widget.hide()
-        self.users_widget.hide()
         self.thresholds_widget.hide()
+        self.users_widget.hide()
 
     def show_tests(self):
-        self.tests_widget.refresh_tests()
+        # Rafraîchit entièrement le widget de tests (conserve valeurs en base)
         self.project_widget.hide()
-        self.tests_widget.show()
-        self.users_widget.hide()
         self.thresholds_widget.hide()
+        self.users_widget.hide()
+        self.tests_widget.refresh()
+        self.tests_widget.show()
 
     def show_thresholds(self):
         self.thresholds_widget.refresh_thresholds()
         self.project_widget.hide()
         self.tests_widget.hide()
-        self.users_widget.hide()
         self.thresholds_widget.show()
+        self.users_widget.hide()
 
     def show_users(self):
         self.users_widget.refresh_users()
         self.project_widget.hide()
         self.tests_widget.hide()
-        self.users_widget.show()
         self.thresholds_widget.hide()
+        self.users_widget.show()
 
     def logout(self):
         self.login_window = LoginWindow(self.db)

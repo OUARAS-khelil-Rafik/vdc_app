@@ -22,17 +22,61 @@ import sqlite3
 import os
 
 # Predefined ISO 14644-1 thresholds (µm/m³ for particles, °C and %)
+# SEUILS ISO 14644-1:2015 – Tableau 1 (concentrations maximales particules/m³)
 DEFAULT_ISO_THRESHOLDS = {
-    "ISO 1": {"Particles >0.5 µm": 10,      "Particles >5 µm": 0,     "Temperature °C": 22, "Relative Humidity %": 50},
-    "ISO 2": {"Particles >0.5 µm": 100,     "Particles >5 µm": 0,     "Temperature °C": 22, "Relative Humidity %": 50},
-    "ISO 3": {"Particles >0.5 µm": 1000,    "Particles >5 µm": 0,     "Temperature °C": 22, "Relative Humidity %": 50},
-    "ISO 4": {"Particles >0.5 µm": 10000,   "Particles >5 µm": 0,     "Temperature °C": 22, "Relative Humidity %": 50},
-    "ISO 5": {"Particles >0.5 µm": 100000,  "Particles >5 µm": 0,     "Temperature °C": 22, "Relative Humidity %": 50},
-    "ISO 6": {"Particles >0.5 µm": 1000000, "Particles >5 µm": 0,     "Temperature °C": 22, "Relative Humidity %": 50},
-    "ISO 7": {"Particles >0.5 µm": 352000,  "Particles >5 µm": 2900,  "Temperature °C": 22, "Relative Humidity %": 50},
-    "ISO 8": {"Particles >0.5 µm": 832000,  "Particles >5 µm": 29300, "Temperature °C": 22, "Relative Humidity %": 50},
-    "ISO 9": {"Particles >0.5 µm": 8320000, "Particles >5 µm": 293000,"Temperature °C": 22, "Relative Humidity %": 50},
+    "ISO 1": {
+        "Particles ≥0.1 µm": 10
+    },
+    "ISO 2": {
+        "Particles ≥0.1 µm": 100,
+        "Particles ≥0.2 µm": 24,
+        "Particles ≥0.3 µm": 10
+    },
+    "ISO 3": {
+        "Particles ≥0.1 µm": 1_000,
+        "Particles ≥0.2 µm": 237,
+        "Particles ≥0.3 µm": 102,
+        "Particles ≥0.5 µm": 35
+    },
+    "ISO 4": {
+        "Particles ≥0.1 µm": 10_000,
+        "Particles ≥0.2 µm": 2_370,
+        "Particles ≥0.3 µm": 1_020,
+        "Particles ≥0.5 µm": 352,
+        "Particles ≥1 µm": 83
+    },
+    "ISO 5": {
+        "Particles ≥0.1 µm": 100_000,
+        "Particles ≥0.2 µm": 23_700,
+        "Particles ≥0.3 µm": 10_200,
+        "Particles ≥0.5 µm": 3_520,
+        "Particles ≥1 µm": 832
+    },
+    "ISO 6": {
+        "Particles ≥0.1 µm": 1_000_000,
+        "Particles ≥0.2 µm": 237_000,
+        "Particles ≥0.3 µm": 102_000,
+        "Particles ≥0.5 µm": 35_200,
+        "Particles ≥1 µm": 8_320,
+        "Particles ≥5 µm": 293
+    },
+    "ISO 7": {
+        "Particles ≥0.5 µm": 352_000,
+        "Particles ≥1 µm": 83_200,
+        "Particles ≥5 µm": 2_930
+    },
+    "ISO 8": {
+        "Particles ≥0.5 µm": 3_520_000,
+        "Particles ≥1 µm": 832_000,
+        "Particles ≥5 µm": 29_300
+    },
+    "ISO 9": {
+        "Particles ≥0.5 µm": 35_200_000,
+        "Particles ≥1 µm": 8_320_000,
+        "Particles ≥5 µm": 293_000
+    },
 }
+
 
 DB_PATH = os.path.join(os.path.dirname(__file__), '..', 'data/vdc.db')
 

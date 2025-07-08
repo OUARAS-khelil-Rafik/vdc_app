@@ -5,6 +5,7 @@ Gestion de la base SQLite pour le MVP VDC Engineering :
 – Création des tables (users, projects, thresholds, tests, measurements)
 – Authentification des utilisateurs avec rôles
 – Gestion des mots de passe (hachage SHA-256)
+– Nouvelles méthodes pour enregistrer les sessions de tests et leurs mesures
 """
 
 import sqlite3
@@ -49,18 +50,18 @@ class Database:
                 room_type         TEXT,
                 cleanroom_area    INTEGER CHECK(cleanroom_area >= 0),
                 test_date         TEXT NOT NULL,
-                iso_class         TEXT NOT NULL CHECK(iso_class IN ('ISO 1', 'ISO 2', 'ISO 3', 'ISO 4', 'ISO 5', 'ISO 6', 'ISO 7', 'ISO 8', 'ISO 9')),
+                iso_class         TEXT NOT NULL CHECK(iso_class IN ('ISO 1','ISO 2','ISO 3','ISO 4','ISO 5','ISO 6','ISO 7','ISO 8','ISO 9')),
                 validation_status TEXT NOT NULL DEFAULT 'En attente' CHECK(validation_status IN ('En attente','Validé')),
                 assigned_to       INTEGER,
                 FOREIGN KEY (assigned_to) REFERENCES users(id)
             );
             """)
 
-            # Seuils : table pour les seuils ISO et personnalisés
+            # Seuils ISO / personnalisés
             self.conn.execute("""
             CREATE TABLE IF NOT EXISTS thresholds (
                 id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                iso_name     TEXT,
+                iso_name     TEXT,   -- ISO 1, ISO 2, etc. (NULL si seuil custom)
                 test_name    TEXT NOT NULL,
                 value        REAL,
                 UNIQUE (iso_name, test_name)
@@ -78,9 +79,9 @@ class Database:
                 is_validated     INTEGER DEFAULT 0,
                 validated_by     INTEGER,
                 validated_date   TEXT,
-                FOREIGN KEY(project_id)    REFERENCES projects(id),
-                FOREIGN KEY(technician_id) REFERENCES users(id),
-                FOREIGN KEY(validated_by)  REFERENCES users(id)
+                FOREIGN KEY(project_id)     REFERENCES projects(id),
+                FOREIGN KEY(technician_id)  REFERENCES users(id),
+                FOREIGN KEY(validated_by)   REFERENCES users(id)
             );
             """)
 
@@ -102,15 +103,16 @@ class Database:
         """
         return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
-    def create_user(self,
-                    username: str,
-                    password: str,
-                    full_name: str,
-                    role: str,
-                    validate_user: str = "Non validé") -> int:
+    def create_user(
+        self,
+        username: str,
+        password: str,
+        full_name: str,
+        role: str,
+        validate_user: str = "Non validé"
+    ) -> int:
         """
         Crée un nouvel utilisateur et renvoie son ID.
-        Lève sqlite3.IntegrityError si le username existe déjà.
         """
         pwd_hash = self._hash_password(password)
         with self.conn:
@@ -121,12 +123,14 @@ class Database:
             )
             return cursor.lastrowid
 
-    def authenticate_user(self,
-                        username: str,
-                        password: str) -> Optional[Dict[str, Any]]:
+    def authenticate_user(
+        self,
+        username: str,
+        password: str
+    ) -> Optional[Dict[str, Any]]:
         """
         Vérifie les identifiants, et renvoie un dict contenant les infos utilisateur
-        si OK, ou None sinon. Seuls les utilisateurs validés peuvent se connecter.
+        si OK, ou None sinon.
         """
         pwd_hash = self._hash_password(password)
         cursor = self.conn.execute(
@@ -136,13 +140,50 @@ class Database:
             (username, pwd_hash)
         )
         row = cursor.fetchone()
-        if row is not None:
+        if row:
             return {
                 "id": row["id"],
                 "username": row["username"],
                 "full_name": row["full_name"],
                 "role": row["role"]
             }
-        else:
-            return None
+        return None
 
+    # ----------------------------------------------------------------
+    # Nouvelles méthodes pour enregistrer les tests et mesures
+    # ----------------------------------------------------------------
+
+    def create_test(
+        self,
+        project_id: int,
+        technician_id: int,
+        test_name: str,
+        measurement_date: str
+    ) -> int:
+        """
+        Crée une session de test et renvoie l'ID généré.
+        """
+        cursor = self.conn.execute(
+            "INSERT INTO tests (project_id, technician_id, test_name, measurement_date) "
+            "VALUES (?, ?, ?, ?)",
+            (project_id, technician_id, test_name, measurement_date)
+        )
+        self.conn.commit()
+        return cursor.lastrowid
+
+    def add_measurement(
+        self,
+        test_id: int,
+        point_name: str,
+        parameter: str,
+        value: float
+    ) -> None:
+        """
+        Enregistre une mesure pour un point donné dans une session de test.
+        """
+        self.conn.execute(
+            "INSERT INTO measurements (test_id, point_name, parameter, value) "
+            "VALUES (?, ?, ?, ?)",
+            (test_id, point_name, parameter, value)
+        )
+        self.conn.commit()
