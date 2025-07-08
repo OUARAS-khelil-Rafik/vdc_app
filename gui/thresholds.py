@@ -239,18 +239,12 @@ class ThresholdsWidget(QWidget):
             }
             QPushButton:hover { background-color: #b8d5ed; color: #1c5ea3; }
             QComboBox#isoCombo {
-                background-color: #1c5ea3;
-                color: #fff;
-                border-radius: 8px;
-                padding: 8px 24px;
-                font-weight: bold;
-                font-size: 14px;
-                border: none;
-                min-width: 180px;
+                background: #fff; border: 1px solid #b8d5ed; border-radius: 4px;
+                padding: 4px 8px; font-size: 14px; min-width: 180px;
+                color: #1c5ea3; font-weight: bold;
             }
-            QComboBox#isoCombo::drop-down {
-                border: none;
-                background: transparent;
+            QComboBox#isoCombo:focus {
+                border: 2px solid #1c5ea3;
             }
             QComboBox#isoCombo QAbstractItemView {
                 background: #fff;
@@ -260,6 +254,7 @@ class ThresholdsWidget(QWidget):
                 border-radius: 8px;
                 font-size: 14px;
             }
+            QLabel { color: #1c5ea3; font-weight: bold; font-size: 13px; }
         """)
 
         self.table = ThresholdsTable()
@@ -267,14 +262,15 @@ class ThresholdsWidget(QWidget):
 
         # ISO ComboBox directly, like in TestSessionWidget
         self.lbl_choose = QLabel("Choisir ISO :")
-        self.lbl_choose.setStyleSheet("font-weight: bold; font-size: 23px; color: #1c5ea3; background: transparent;")
+        self.lbl_choose.setStyleSheet("font-weight: bold; font-size: 20px; color: #1c5ea3; background: transparent;")
 
         self.iso_combo = QComboBox(self)
         self.iso_combo.setObjectName("isoCombo")
-        self.iso_combo.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.iso_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.iso_combo.addItems(list(ISO_THRESHOLDS.keys()))
         self.iso_combo.setCurrentText(self.selected_iso)
         self.iso_combo.currentTextChanged.connect(self.on_iso_changed)
+        self.iso_combo.setFixedHeight(28)
 
         # Buttons
         self.btn_add = QPushButton("Ajouter Seuil")
@@ -508,6 +504,7 @@ class ThresholdForm(QDialog):
                 background: #fff; border: 1px solid #b8d5ed; border-radius: 4px;
                 padding: 4px 8px; font-size: 14px;
             }
+            QLineEdit:focus, QComboBox:focus { border: 2px solid #1c5ea3; }
             QLabel { color: #1c5ea3; font-weight: bold; font-size: 13px; }
             QPushButton {
                 background-color: #b8d5ed; color: #1c5ea3; border: none; border-radius: 4px;

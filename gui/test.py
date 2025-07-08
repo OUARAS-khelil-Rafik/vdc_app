@@ -19,28 +19,20 @@ class TestSessionWidget(QWidget):
         self.tm   = TestManager(db)
         self.current_test_id = None
 
-        self.setStyleSheet(self._get_stylesheet())
-
-        # Label for project selection
-        self.lbl_choose = QLabel("Choisit projet :")
-        self.lbl_choose.setStyleSheet("font-weight: bold; font-size: 23px; color: #1c5ea3; background: transparent;")
-
-        self.combo = QComboBox(self)
-        self.combo.setObjectName("projectCombo")
-        self.combo.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        self.combo.currentIndexChanged.connect(self._on_project_changed)
-        self.combo.setStyleSheet("""
-            QComboBox#projectCombo {
-                background-color: #1c5ea3;
-                color: #fff;
-                border-radius: 8px;
-                font-weight: bold;
-                font-size: 14px;
-                border: none;
+        self.setStyleSheet("""
+            QWidget { background-color: #e0e0e0; }
+            QPushButton {
+                background-color: #1c5ea3; color: #fff; border-radius: 8px;
+                padding: 8px 24px; font-weight: bold; font-size: 14px;
             }
-            QComboBox#projectCombo::drop-down {
-                border: none;
-                background: transparent;
+            QPushButton:hover { background-color: #b8d5ed; color: #1c5ea3; }
+            QComboBox#projectCombo {
+                background: #fff; border: 1px solid #b8d5ed; border-radius: 4px;
+                padding: 4px 8px; font-size: 14px; min-width: 180px;
+                color: #1c5ea3; font-weight: bold;
+            }
+            QComboBox#projectCombo:focus {
+                border: 2px solid #1c5ea3;
             }
             QComboBox#projectCombo QAbstractItemView {
                 background: #fff;
@@ -50,7 +42,41 @@ class TestSessionWidget(QWidget):
                 border-radius: 8px;
                 font-size: 14px;
             }
+            QTableWidget {
+                background-color: #fff; 
+                alternate-background-color: #b8d5ed;
+                gridline-color: #1c5ea3; 
+                selection-background-color: #b8d5ed;
+                selection-color: #1c5ea3; 
+                border: 2px solid #1c5ea3; 
+                font-size: 15px;
+                border-radius: 8px;
+            }
+            QHeaderView::section {
+                background-color: #1c5ea3; color: #fff; font-weight: bold;
+                border: none; padding: 6px; qproperty-alignment: 'AlignCenter | AlignVCenter';
+            }
+            QTableWidget::item {
+                border-bottom: 1px solid #b8d5ed;
+                border-right: 1px solid #b8d5ed;
+            }
+            QLineEdit, QDateEdit {
+                background: #fff; border: 1px solid #b8d5ed; border-radius: 4px;
+                padding: 4px 8px; font-size: 14px;
+            }
+            QLineEdit:focus, QDateEdit:focus { border: 2px solid #1c5ea3; }
+            QLabel { color: #1c5ea3; font-weight: bold; font-size: 13px; }
         """)
+
+        # Label for project selection
+        self.lbl_choose = QLabel("Choisit projet :")
+        self.lbl_choose.setStyleSheet("font-weight: bold; font-size: 20px; color: #1c5ea3; background: transparent;")
+
+        self.combo = QComboBox(self)
+        self.combo.setObjectName("projectCombo")
+        self.combo.setFixedHeight(28)
+        self.combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.combo.currentIndexChanged.connect(self._on_project_changed)
 
         self.lbl_points = QLabel("Points requis : –")
         self.lbl_points.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
@@ -85,47 +111,6 @@ class TestSessionWidget(QWidget):
         self.btn_save.hide()
         self.btn_modify.show()
         self.refresh()
-
-    def _get_stylesheet(self):
-        return """
-            QWidget {
-                background-color: #f5f7fa;
-            }
-            QLabel {
-                color: #1c5ea3; font-weight: bold; font-size: 15px;
-                background: transparent;
-            }
-            TestSessionWidget {
-                background-color: #e0e0e0;
-            }
-            QPushButton {
-                background-color: #1c5ea3; color: #fff; border-radius: 8px;
-                padding: 8px 24px; font-weight: bold; font-size: 14px;
-            }
-            QPushButton:hover { background-color: #b8d5ed; color: #1c5ea3; }
-            QComboBox#projectCombo {
-                background-color: #1c5ea3;
-                color: #fff;
-                border-radius: 8px;
-                padding: 8px 24px;
-                font-weight: bold;
-                font-size: 14px;
-                border: none;
-                min-width: 180px;
-            }
-            QComboBox#projectCombo::drop-down {
-                border: none;
-                background: transparent;
-            }
-            QComboBox#projectCombo QAbstractItemView {
-                background: #fff;
-                color: #1c5ea3;
-                selection-background-color: #b8d5ed;
-                selection-color: #1c5ea3;
-                border-radius: 8px;
-                font-size: 14px;
-            }
-        """
 
     def refresh(self):
         self.current_test_id = None
