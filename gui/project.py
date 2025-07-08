@@ -41,10 +41,17 @@ class ProjectTable(NoFocusTableWidget):
         "iso_class", "validation_status", "assigned_user"
     ]
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, user=None):
         super().__init__(parent)
-        self.setColumnCount(len(self.HEADERS))
-        self.setHorizontalHeaderLabels(self.HEADERS)
+        self.user = user
+        # Détermine si la colonne Actions doit être affichée
+        self.show_actions = True
+        if self.user and self.user.get("role") in ("Technicien", "Technicien premium"):
+            self.show_actions = False
+
+        headers = self.HEADERS[:-1] if not self.show_actions else self.HEADERS
+        self.setColumnCount(len(headers))
+        self.setHorizontalHeaderLabels(headers)
         self.setSelectionBehavior(self.SelectRows)
         self.setSelectionMode(self.ExtendedSelection)
         self.setEditTriggers(self.NoEditTriggers)
@@ -78,13 +85,29 @@ class ProjectTable(NoFocusTableWidget):
         """)
 
     def populate(self, rows):
-        self.setRowCount(len(rows))
-        for i, row in enumerate(rows):
-            row = dict_from_row(row, self.COLUMNS + ['id', 'validation_status'])
+        # Filtrage selon le rôle utilisateur
+        filtered_rows = []
+        if self.user:
+            role = self.user.get("role")
+            user_id = self.user.get("id")
+            if role in ("Admin", "Administrateur"):
+                # Affiche tous les projets pour Admin ou Administrateur
+                filtered_rows = rows
+            else:
+                # Affiche seulement les projets assignés à l'utilisateur
+                for row in rows:
+                    assigned_to = row["assigned_to"] if "assigned_to" in row else row.get("assigned_to")
+                    if assigned_to == user_id:
+                        filtered_rows.append(row)
+        else:
+            filtered_rows = rows
+
+        self.setRowCount(len(filtered_rows))
+        for i, row in enumerate(filtered_rows):
+            row = dict_from_row(row, self.COLUMNS + ['id', 'validation_status', 'assigned_to'])
             for col, key in enumerate(self.COLUMNS):
                 value = row.get(key, "")
                 if key == "cleanroom_area":
-                    # Affiche comme entier naturel, pas de virgule
                     try:
                         value = str(int(float(value)))
                     except Exception:
@@ -96,66 +119,62 @@ class ProjectTable(NoFocusTableWidget):
                     item.setData(Qt.UserRole, row.get('id'))
                 self.setItem(i, col, item)
             # Actions column (last column)
-            action_widget = QWidget()
-            h_layout = QHBoxLayout(action_widget)
-            h_layout.setContentsMargins(0, 0, 0, 0)
-            h_layout.setSpacing(5)
-            h_layout.addStretch()  # Ajoute un stretch avant les boutons pour centrer
+            if self.show_actions:
+                action_widget = QWidget()
+                h_layout = QHBoxLayout(action_widget)
+                h_layout.setContentsMargins(0, 0, 0, 0)
+                h_layout.setSpacing(5)
+                h_layout.addStretch()
 
-            icon_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "icons"))
+                icon_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "icons"))
+                is_valid = row.get("validation_status", "").lower() == "validé"
 
-            # Vérifie si le projet est validé
-            is_valid = row.get("validation_status", "").lower() == "validé"
+                btn_generate_pdf = QPushButton()
+                btn_generate_pdf.setIcon(QIcon(
+                    os.path.join(icon_dir, "pdf_generate.png" if is_valid else "pdf_generate_disabled.png")
+                ))
+                btn_generate_pdf.setToolTip("Générer PDF" if is_valid else "Impossible de générer PDF tant que le projet n'est pas validé")
+                btn_generate_pdf.setFixedSize(28, 28)
+                btn_generate_pdf.setStyleSheet("""
+                    QPushButton {
+                        border: none;
+                        background: transparent;
+                    }
+                    QPushButton:focus, QPushButton:hover {
+                        background: #e6f0fa;
+                    }
+                """)
+                btn_generate_pdf.setEnabled(is_valid)
+                btn_generate_pdf.clicked.connect(lambda _, pid=row['id']: self.generate_pdf(pid))
 
-            btn_generate_pdf = QPushButton()
-            btn_generate_pdf.setIcon(QIcon(
-                os.path.join(icon_dir, "pdf_generate.png" if is_valid else "pdf_generate_disabled.png")
-            ))
-            btn_generate_pdf.setToolTip("Générer PDF" if is_valid else "Impossible de générer PDF tant que le projet n'est pas validé")
-            btn_generate_pdf.setFixedSize(28, 28)
-            btn_generate_pdf.setStyleSheet("""
-                QPushButton {
-                    border: none;
-                    background: transparent;
-                }
-                QPushButton:focus, QPushButton:hover {
-                    background: #e6f0fa;
-                }
-            """)
-            btn_generate_pdf.setEnabled(is_valid)
-            btn_generate_pdf.clicked.connect(lambda _, pid=row['id']: self.generate_pdf(pid))
+                btn_show_pdf = QPushButton()
+                btn_show_pdf.setIcon(QIcon(
+                    os.path.join(icon_dir, "pdf_show.png" if is_valid else "pdf_show_disabled.png")
+                ))
+                btn_show_pdf.setToolTip("Afficher PDF" if is_valid else "Impossible d'afficher PDF tant que le projet n'est pas validé")
+                btn_show_pdf.setFixedSize(28, 28)
+                btn_show_pdf.setStyleSheet("""
+                    QPushButton {
+                        border: none;
+                        background: transparent;
+                    }
+                    QPushButton:focus, QPushButton:hover {
+                        background: #e6f0fa;
+                    }
+                """)
+                btn_show_pdf.setEnabled(is_valid)
+                btn_show_pdf.clicked.connect(lambda _, pid=row['id']: self.show_pdf(pid))
 
-            btn_show_pdf = QPushButton()
-            btn_show_pdf.setIcon(QIcon(
-                os.path.join(icon_dir, "pdf_show.png" if is_valid else "pdf_show_disabled.png")
-            ))
-            btn_show_pdf.setToolTip("Afficher PDF" if is_valid else "Impossible d'afficher PDF tant que le projet n'est pas validé")
-            btn_show_pdf.setFixedSize(28, 28)
-            btn_show_pdf.setStyleSheet("""
-                QPushButton {
-                    border: none;
-                    background: transparent;
-                }
-                QPushButton:focus, QPushButton:hover {
-                    background: #e6f0fa;
-                }
-            """)
-            btn_show_pdf.setEnabled(is_valid)
-            btn_show_pdf.clicked.connect(lambda _, pid=row['id']: self.show_pdf(pid))
-
-            h_layout.addWidget(btn_generate_pdf)
-            h_layout.addWidget(btn_show_pdf)
-            h_layout.addStretch()  # Ajoute un stretch après les boutons pour centrer
-
-            action_widget.setLayout(h_layout)
-            # Centre le widget dans la cellule
-            self.setCellWidget(i, len(self.COLUMNS), action_widget)
-            self.setRowHeight(i, 36)
+                h_layout.addWidget(btn_generate_pdf)
+                h_layout.addWidget(btn_show_pdf)
+                h_layout.addStretch()
+                action_widget.setLayout(h_layout)
+                self.setCellWidget(i, len(self.COLUMNS), action_widget)
+                self.setRowHeight(i, 36)
         self.resizeColumnsToContents()
         self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
     def generate_pdf(self, project_id):
-        # Génère le PDF pour le projet sélectionné
         try:
             from pdf.generator import PDFGenerator
             gen = PDFGenerator(self.parent().db)
@@ -377,7 +396,8 @@ class ProjectWidget(QWidget):
             }
         """)
 
-        self.table = ProjectTable()
+        # Pass user to ProjectTable to control "Actions" column visibility
+        self.table = ProjectTable(user=self.user)
         self.table.setFocusPolicy(Qt.NoFocus)
 
         self.btn_add = QPushButton("Ajouter Projet")
@@ -398,9 +418,11 @@ class ProjectWidget(QWidget):
 
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
-        btn_layout.addWidget(self.btn_add)
-        btn_layout.addWidget(self.btn_edit)
-        btn_layout.addWidget(self.btn_delete)
+        # Hide buttons for Technicien and Technicien premium
+        if self.user.get("role") not in ("Technicien", "Technicien premium"):
+            btn_layout.addWidget(self.btn_add)
+            btn_layout.addWidget(self.btn_edit)
+            btn_layout.addWidget(self.btn_delete)
         btn_layout.addStretch()
 
         layout = QVBoxLayout()
@@ -410,8 +432,21 @@ class ProjectWidget(QWidget):
         self.refresh_projects()
 
     def refresh_projects(self):
-        dict_rows = self.manager.get_projects()
-        self.table.populate(dict_rows)
+        all_projects = self.manager.get_projects()
+        # Filtrer selon le rôle utilisateur
+        if self.user:
+            role = self.user.get("role")
+            user_id = self.user.get("id")
+            if role in ("Admin", "Administrateur"):
+                filtered_projects = all_projects
+            else:
+                filtered_projects = [
+                    row for row in all_projects
+                    if (row["assigned_to"] if "assigned_to" in row else row.get("assigned_to")) == user_id
+                ]
+        else:
+            filtered_projects = all_projects
+        self.table.populate(filtered_projects)
         for i in range(self.table.rowCount()):
             for j in range(self.table.columnCount()):
                 item = self.table.item(i, j)

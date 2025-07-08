@@ -160,6 +160,12 @@ class TestSessionWidget(QWidget):
         area       = proj["cleanroom_area"]
         iso_class  = proj["iso_class"]
 
+        # Hide modify button if project is validated
+        if proj.get("validation_status") == "Validé":
+            self.btn_modify.hide()
+        else:
+            self.btn_modify.show()
+
         needed = self.tm.get_required_points(project_id)
         self.lbl_points.setText(f"Surface = {area} m² • {needed} points requis")
 

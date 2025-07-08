@@ -12,7 +12,7 @@ Gère les interactions utilisateur via une interface graphique PyQt5.
 from PyQt5.QtWidgets import (
     QWidget, QTableWidget, QTableWidgetItem, QVBoxLayout,
     QHBoxLayout, QMessageBox, QDialog, QHeaderView, QSizePolicy,
-    QPushButton, QFormLayout, QLineEdit, QComboBox
+    QPushButton, QFormLayout, QLineEdit, QComboBox, QLabel
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor
@@ -21,8 +21,7 @@ from models.thresholdmanager import ThresholdManager
 import sqlite3
 import os
 
-# Predefined ISO 14644-1 thresholds (µm/m³ for particles, °C and %)
-# SEUILS ISO 14644-1:2015 – Tableau 1 (concentrations maximales particules/m³)
+# SEUILS ISO 14644-1:2015 – (concentrations maximales particules/m³)
 DEFAULT_ISO_THRESHOLDS = {
     "ISO 1": {
         "Particles ≥0.1 µm": 10
@@ -148,96 +147,6 @@ def delete_iso_threshold(iso_name, test_name):
 # Use this global variable in the rest of the code
 ISO_THRESHOLDS = load_iso_thresholds()
 
-class IsoChoiceWidget(QWidget):
-    def __init__(self, combo: QComboBox, parent=None):
-        super().__init__(parent)
-        self.setObjectName("IsoChoiceWidget")
-
-        self.combo = combo
-        self.combo.setObjectName("isoCombo")
-        self.combo.setVisible(False)
-        self.combo.setEditable(False)
-        self.combo.setInsertPolicy(QComboBox.NoInsert)
-
-        self.btn = QPushButton(self)
-        self.btn.setObjectName("isoBtn")
-        self.btn.setCursor(Qt.PointingHandCursor)
-        self.btn.setText(f"{self.combo.currentText()}  ▲")
-
-        # Signals
-        self.btn.clicked.connect(self.show_combo_popup)
-        self.combo.currentTextChanged.connect(self.update_text)
-
-        # Style
-        self.setStyleSheet("""
-            QWidget#IsoChoiceWidget {
-                background: transparent;
-            }
-            QPushButton#isoBtn {
-                background-color: #1c5ea3;
-                color: #fff;
-                border-radius: 8px;
-                padding: 8px 32px 8px 24px;
-                font-weight: bold;
-                font-size: 14px;
-                border: 2px solid #1c5ea3;
-                text-align: left;
-            }
-            QPushButton#isoBtn:hover {
-                background-color: #b8d5ed;
-                color: #1c5ea3;
-            }
-            QComboBox#isoCombo {
-                background-color: #1c5ea3;
-                color: #fff;
-                border-radius: 8px;
-                padding: 8px 32px 8px 24px;
-                font-weight: bold;
-                font-size: 14px;
-                border: none;
-            }
-            QComboBox#isoCombo::drop-down {
-                border: none;
-                background: transparent;
-                width: 0px;
-            }
-            QComboBox#isoCombo QAbstractItemView {
-                background: #fff;
-                color: #1c5ea3;
-                selection-background-color: #b8d5ed;
-                selection-color: #1c5ea3;
-                border-radius: 8px;
-                font-size: 14px;
-            }
-        """)
-
-        # Layout
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addWidget(self.btn)
-        layout.addWidget(self.combo)
-        layout.addStretch()
-
-        self.update_button_size()
-
-    def update_text(self, text):
-        self.btn.setText(f"{text}  ▲")
-        self.update_button_size()
-
-    def update_button_size(self):
-        font_metrics = self.btn.fontMetrics()
-        width = font_metrics.horizontalAdvance(self.btn.text()) + 40
-        self.btn.setMinimumWidth(width)
-
-    def show_combo_popup(self):
-        self.combo.setFixedWidth(self.btn.width())
-        popup = self.combo.view().window()
-        pos = self.combo.mapToGlobal(self.combo.rect().bottomLeft())
-        popup.move(pos)
-        self.combo.showPopup()
-        self.combo.setFocus()
-
 class ThresholdsTable(QTableWidget):
     HEADERS = ["Test", "Seuil"]
 
@@ -356,15 +265,18 @@ class ThresholdsWidget(QWidget):
         self.table = ThresholdsTable()
         self.table.setFocusPolicy(Qt.NoFocus)
 
-        self.iso_combo = QComboBox()
+        # ISO ComboBox directly, like in TestSessionWidget
+        self.lbl_choose = QLabel("Choisir ISO :")
+        self.lbl_choose.setStyleSheet("font-weight: bold; font-size: 23px; color: #1c5ea3; background: transparent;")
+
+        self.iso_combo = QComboBox(self)
         self.iso_combo.setObjectName("isoCombo")
+        self.iso_combo.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.iso_combo.addItems(list(ISO_THRESHOLDS.keys()))
         self.iso_combo.setCurrentText(self.selected_iso)
         self.iso_combo.currentTextChanged.connect(self.on_iso_changed)
-        self.iso_combo.setVisible(False)
 
-        self.iso_choice = IsoChoiceWidget(self.iso_combo)
-
+        # Buttons
         self.btn_add = QPushButton("Ajouter Seuil")
         self.btn_edit = QPushButton("Modifier Seuil")
         self.btn_delete = QPushButton("Supprimer Seuil")
@@ -373,8 +285,10 @@ class ThresholdsWidget(QWidget):
         self.btn_edit.clicked.connect(self.edit_threshold)
         self.btn_delete.clicked.connect(self.delete_threshold)
 
+        # Layouts
         top_layout = QHBoxLayout()
-        top_layout.addWidget(self.iso_choice)
+        top_layout.addWidget(self.lbl_choose)
+        top_layout.addWidget(self.iso_combo)
         top_layout.addStretch()
 
         btn_layout = QHBoxLayout()
@@ -438,7 +352,7 @@ class ThresholdsWidget(QWidget):
                     QMessageBox.warning(self, "Doublon", "Ce test existe déjà pour cet ISO.", QMessageBox.Ok)
                     return
                 ISO_THRESHOLDS[self.selected_iso][data["test_name"]] = value
-                update_iso_threshold(self.selected_iso, data["test_name"], value)  # CHANGEMENT: écrire dans la base
+                update_iso_threshold(self.selected_iso, data["test_name"], value)
                 self.show_iso_thresholds()
             return
 
@@ -492,7 +406,7 @@ class ThresholdsWidget(QWidget):
                     QMessageBox.warning(self, "Valeur incorrecte", "La valeur doit être un nombre.", QMessageBox.Ok)
                     return
                 ISO_THRESHOLDS[self.selected_iso][test_name] = new_val
-                update_iso_threshold(self.selected_iso, test_name, new_val)  # CHANGEMENT: mise à jour base
+                update_iso_threshold(self.selected_iso, test_name, new_val)
                 self.show_iso_thresholds()
             return
 
@@ -549,7 +463,7 @@ class ThresholdsWidget(QWidget):
             )
             if confirm == QMessageBox.Yes:
                 del ISO_THRESHOLDS[self.selected_iso][test_name]
-                delete_iso_threshold(self.selected_iso, test_name)  # CHANGEMENT: suppression en base
+                delete_iso_threshold(self.selected_iso, test_name)
                 self.show_iso_thresholds()
             return
 
@@ -573,6 +487,7 @@ class ThresholdsWidget(QWidget):
                 self.show_custom_thresholds()
             except Exception as e:
                 QMessageBox.critical(self, "Erreur", f"Impossible de supprimer le seuil : {e}", QMessageBox.Ok)
+
     def refresh_thresholds(self):
         if self.showing_iso:
             self.show_iso_thresholds()
