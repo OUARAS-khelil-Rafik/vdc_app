@@ -1,3 +1,5 @@
+# models/projectmanager.py
+
 from .utils import dict_from_row
 
 class ProjectManager:
@@ -7,45 +9,57 @@ class ProjectManager:
     def get_projects(self):
         cursor = self.db.conn.cursor()
         cursor.execute("""
-            SELECT id, company_name, location, room_type, test_date, iso_class, validation_status
-            FROM projects
-            ORDER BY test_date DESC
+            SELECT p.id, p.company_name, p.location, p.room_type, p.test_date,
+                p.iso_class, p.validation_status,
+                u.full_name AS assigned_user
+            FROM projects p
+            LEFT JOIN users u ON p.assigned_to = u.id
+            ORDER BY p.test_date DESC
         """)
         rows = cursor.fetchall()
         return [dict_from_row(row, [
-            "id", "company_name", "location", "room_type", "test_date", "iso_class", "validation_status"
+            "id", "company_name", "location", "room_type", "test_date",
+            "iso_class", "validation_status", "assigned_user"
         ]) for row in rows]
+
 
     def get_project(self, project_id):
         cursor = self.db.conn.cursor()
         cursor.execute("""
-            SELECT id, company_name, location, room_type, test_date, iso_class, validation_status
-            FROM projects
-            WHERE id = ?
+            SELECT p.id, p.company_name, p.location, p.room_type, p.test_date,
+                p.iso_class, p.validation_status, p.assigned_to,
+                u.full_name AS assigned_user
+            FROM projects p
+            LEFT JOIN users u ON p.assigned_to = u.id
+            WHERE p.id = ?
         """, (project_id,))
         row = cursor.fetchone()
         if row:
             return dict_from_row(row, [
-                "id", "company_name", "location", "room_type", "test_date", "iso_class", "validation_status"
+                "id", "company_name", "location", "room_type", "test_date",
+                "iso_class", "validation_status", "assigned_to", "assigned_user"
             ])
         return None
 
-    def add_project(self, company, location, room, date, iso_class, validation_status):
+
+    def add_project(self, company, location, room, date, iso_class, validation_status, assigned_to):
         cursor = self.db.conn.cursor()
         cursor.execute("""
-            INSERT INTO projects (company_name, location, room_type, test_date, iso_class, validation_status)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (company, location, room, date, iso_class, validation_status))
+            INSERT INTO projects (company_name, location, room_type, test_date, iso_class, validation_status, assigned_to)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (company, location, room, date, iso_class, validation_status, assigned_to))
         self.db.conn.commit()
 
-    def update_project(self, project_id, company, location, room, date, iso_class, validation_status):
+
+    def update_project(self, project_id, company, location, room, date, iso_class, validation_status, assigned_to):
         cursor = self.db.conn.cursor()
         cursor.execute("""
             UPDATE projects
-            SET company_name=?, location=?, room_type=?, test_date=?, iso_class=?, validation_status=?
+            SET company_name=?, location=?, room_type=?, test_date=?, iso_class=?, validation_status=?, assigned_to=?
             WHERE id=?
-        """, (company, location, room, date, iso_class, validation_status, project_id))
+        """, (company, location, room, date, iso_class, validation_status, assigned_to, project_id))
         self.db.conn.commit()
+
 
     def delete_project(self, project_id):
         cursor = self.db.conn.cursor()

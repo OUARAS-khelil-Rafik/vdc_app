@@ -25,7 +25,7 @@ def initialize_database():
     db = Database(DB_PATH)
     db.initialize()
     try:
-        db.create_user("admin", "admin", "Nacim SAIDI", "Administrateur", "Validé")
+        db.create_user("admin", "admin", "SAIDI Nacim", "Administrateur", "Validé")
     except Exception:
         pass  # Ignore if user already exists
     return db

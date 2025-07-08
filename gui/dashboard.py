@@ -70,7 +70,7 @@ class DashboardWindow(QMainWindow):
 
     def _init_ui(self):
         self.setWindowTitle("VDC Engineering – Tableau de bord")
-        self.setMinimumSize(800, 600)
+        self.setMinimumSize(900, 600)
         self.setStyleSheet("""
             QMainWindow, QWidget { background-color: #e0e0e0; }
             QLabel#welcomeLabel {

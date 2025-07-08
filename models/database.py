@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 """
 models/database.py
 
@@ -51,7 +48,9 @@ class Database:
                 room_type         TEXT,
                 test_date         TEXT NOT NULL,
                 iso_class         TEXT NOT NULL CHECK(iso_class IN ('ISO 1', 'ISO 2', 'ISO 3', 'ISO 4', 'ISO 5', 'ISO 6', 'ISO 7', 'ISO 8', 'ISO 9')),
-                validation_status TEXT NOT NULL DEFAULT 'En attente' CHECK(validation_status IN ('En attente','Validé'))
+                validation_status TEXT NOT NULL DEFAULT 'En attente' CHECK(validation_status IN ('En attente','Validé')),
+                assigned_to       INTEGER,
+                FOREIGN KEY (assigned_to) REFERENCES users(id)
             );
             """)
 

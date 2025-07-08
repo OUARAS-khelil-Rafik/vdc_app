@@ -17,12 +17,12 @@ class NoFocusTableWidget(QTableWidget):
 
 class ProjectTable(NoFocusTableWidget):
     HEADERS = [
-        "ID", "Entreprise", "Localisation", "Type de salle", "Date de test",
-        "Classe ISO", "Statut validation"
+        "Entreprise", "Localisation", "Type de salle", "Date de test",
+        "Classe ISO", "Statut validation", "Responsable"
     ]
     COLUMNS = [
-        "id", "company_name", "location", "room_type", "test_date",
-        "iso_class", "validation_status"
+        "company_name", "location", "room_type", "test_date",
+        "iso_class", "validation_status", "assigned_user"
     ]
 
     def __init__(self, parent=None):
@@ -62,13 +62,14 @@ class ProjectTable(NoFocusTableWidget):
     def populate(self, rows):
         self.setRowCount(len(rows))
         for i, row in enumerate(rows):
-            row = dict_from_row(row, self.COLUMNS)
+            # On ne met pas 'id' dans les colonnes affichées, mais on le stocke dans le UserRole de la première colonne
+            row = dict_from_row(row, self.COLUMNS + ['id'])
             for col, key in enumerate(self.COLUMNS):
                 item = QTableWidgetItem(str(row.get(key, "")))
                 item.setTextAlignment(Qt.AlignCenter)
                 item.setBackground(QColor(Qt.white))
                 if col == 0:
-                    item.setData(Qt.UserRole, row['id'])
+                    item.setData(Qt.UserRole, row.get('id'))
                 self.setItem(i, col, item)
         self.resizeColumnsToContents()
         self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
@@ -138,6 +139,22 @@ class ProjectForm(QDialog):
         self.input_iso.addItems(self.ISO_CLASSES)
         self.input_status   = QComboBox()
         self.input_status.addItems(self.VALIDATION_STATUSES)
+        
+        # Récupère tous les utilisateurs disponibles
+        cursor = self.db.conn.cursor()
+        cursor.execute("SELECT id, full_name FROM users WHERE validate_user='Validé'")
+        self.user_list = cursor.fetchall()
+
+        self.input_assigned_to = QComboBox()
+        for user in self.user_list:
+            self.input_assigned_to.addItem(user["full_name"], user["id"])
+        
+        if self.project and self.project.get("assigned_to"):
+            for idx in range(self.input_assigned_to.count()):
+                if self.input_assigned_to.itemData(idx) == self.project["assigned_to"]:
+                    self.input_assigned_to.setCurrentIndex(idx)
+                    break
+
 
         # Ajout d'un bouton pour afficher les seuils ISO sélectionnés
         self.btn_show_thresholds = QPushButton("Voir seuils ISO")
@@ -175,6 +192,7 @@ class ProjectForm(QDialog):
         form_layout.addRow("Date du test :",  self.input_date)
         form_layout.addRow("Classe ISO :",    self.input_iso)
         form_layout.addRow("Statut validation :", self.input_status)
+        form_layout.addRow("Responsable du projet :", self.input_assigned_to)
         form_layout.addRow("", self.btn_show_thresholds)
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
@@ -205,6 +223,7 @@ class ProjectForm(QDialog):
         date     = self.input_date.date().toString("yyyy-MM-dd")
         iso_class = self.input_iso.currentText()
         validation_status = self.input_status.currentText()
+        assigned_to = self.input_assigned_to.currentData()
 
         if not company or not date or not iso_class or not validation_status:
             QMessageBox.warning(self, "Champs manquants", "Le nom de l'entreprise, la date, la classe ISO et le statut sont obligatoires.", QMessageBox.Ok)
@@ -212,10 +231,10 @@ class ProjectForm(QDialog):
         try:
             if self.project:
                 self.manager.update_project(
-                    self.project["id"], company, location, room, date, iso_class, validation_status
+                    self.project["id"], company, location, room, date, iso_class, validation_status, assigned_to
                 )
             else:
-                self.manager.add_project(company, location, room, date, iso_class, validation_status)
+                self.manager.add_project(company, location, room, date, iso_class, validation_status, assigned_to)
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Erreur", f"Impossible de {'modifier' if self.project else 'créer'} le projet : {e}", QMessageBox.Ok)
@@ -285,6 +304,7 @@ class ProjectWidget(QWidget):
         dialog = ProjectForm(self.db, self.user)
         if dialog.exec_() == QDialog.Accepted:
             self.refresh_projects()
+
 
     def edit_project(self):
         project_id = self.table.get_selected_project_id()
