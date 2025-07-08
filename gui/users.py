@@ -1,3 +1,13 @@
+# gui/users.py
+
+"""
+Fenêtre de gestion des utilisateurs pour l'application VDC Engineering MVP.
+Gère l'affichage, l'ajout, la modification et la suppression des utilisateurs.
+Gère les rôles (Administrateur, Technicien, Technicien premium) et la validation des comptes.
+Gère la persistance des utilisateurs dans une base de données SQLite.
+Gère les interactions utilisateur via une interface graphique PyQt5.
+"""
+
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QTableWidgetItem, QHeaderView, QSizePolicy, QTableWidget,
     QPushButton, QHBoxLayout, QDialog, QFormLayout, QLineEdit, QComboBox, QMessageBox, QLabel

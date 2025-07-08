@@ -1,14 +1,30 @@
 # gui/project.py
+
+"""
+Fenêtre de gestion des projets pour l’application VDC Engineering MVP.
+Gère l'affichage, l'ajout, la modification et la suppression des projets.
+Gère la génération et l'affichage des rapports PDF pour chaque projet.
+Gère les interactions utilisateur via une interface graphique PyQt5.
+Gère la persistance des projets dans une base de données SQLite.
+Gère les seuils ISO et les utilisateurs assignés aux projets.
+Gère les interactions avec le gestionnaire de projets.
+Gère les interactions avec le gestionnaire de seuils ISO.
+Gère les interactions avec le gestionnaire d'utilisateurs.
+Gère les interactions avec le gestionnaire de tests.
+Gère les interactions avec le gestionnaire de rapports PDF.
+"""
+
 import os
 from PyQt5.QtWidgets import (
     QWidget, QTableWidget, QTableWidgetItem, QVBoxLayout,
     QHBoxLayout, QMessageBox, QDialog, QHeaderView, QSizePolicy,
-    QPushButton, QFormLayout, QLineEdit, QDateEdit, QDialogButtonBox
+    QPushButton, QFormLayout, QLineEdit, QDateEdit, QDialogButtonBox,
+    QComboBox
 )
-from PyQt5.QtCore import Qt, QDate
-from PyQt5.QtGui import QColor
+from PyQt5.QtCore import Qt, QDate, QUrl
+from PyQt5.QtGui import QColor, QIcon, QDesktopServices
 from models.projectmanager import ProjectManager
-from models.utils import dict_from_row
+from models.utils import dict_from_row        
 
 class NoFocusTableWidget(QTableWidget):
     def __init__(self, *args, **kwargs):
@@ -18,7 +34,7 @@ class NoFocusTableWidget(QTableWidget):
 class ProjectTable(NoFocusTableWidget):
     HEADERS = [
         "Entreprise", "Localisation", "Type de salle", "Date de test",
-        "Classe ISO", "Statut validation", "Responsable"
+        "Classe ISO", "Statut validation", "Responsable", "Actions"
     ]
     COLUMNS = [
         "company_name", "location", "room_type", "test_date",
@@ -62,8 +78,7 @@ class ProjectTable(NoFocusTableWidget):
     def populate(self, rows):
         self.setRowCount(len(rows))
         for i, row in enumerate(rows):
-            # On ne met pas 'id' dans les colonnes affichées, mais on le stocke dans le UserRole de la première colonne
-            row = dict_from_row(row, self.COLUMNS + ['id'])
+            row = dict_from_row(row, self.COLUMNS + ['id', 'validation_status'])
             for col, key in enumerate(self.COLUMNS):
                 item = QTableWidgetItem(str(row.get(key, "")))
                 item.setTextAlignment(Qt.AlignCenter)
@@ -71,8 +86,85 @@ class ProjectTable(NoFocusTableWidget):
                 if col == 0:
                     item.setData(Qt.UserRole, row.get('id'))
                 self.setItem(i, col, item)
+            # Actions column (last column)
+            action_widget = QWidget()
+            h_layout = QHBoxLayout(action_widget)
+            h_layout.setContentsMargins(0, 0, 0, 0)
+            h_layout.setSpacing(5)
+            h_layout.addStretch()  # Ajoute un stretch avant les boutons pour centrer
+
+            icon_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "icons"))
+
+            # Vérifie si le projet est validé
+            is_valid = row.get("validation_status", "").lower() == "validé"
+
+            btn_generate_pdf = QPushButton()
+            btn_generate_pdf.setIcon(QIcon(
+                os.path.join(icon_dir, "pdf_generate.png" if is_valid else "pdf_generate_disabled.png")
+            ))
+            btn_generate_pdf.setToolTip("Générer PDF" if is_valid else "Impossible de générer PDF tant que le projet n'est pas validé")
+            btn_generate_pdf.setFixedSize(28, 28)
+            btn_generate_pdf.setStyleSheet("""
+                QPushButton {
+                    border: none;
+                    background: transparent;
+                }
+                QPushButton:focus, QPushButton:hover {
+                    background: #e6f0fa;
+                }
+            """)
+            btn_generate_pdf.setEnabled(is_valid)
+            btn_generate_pdf.clicked.connect(lambda _, pid=row['id']: self.generate_pdf(pid))
+
+            btn_show_pdf = QPushButton()
+            btn_show_pdf.setIcon(QIcon(
+                os.path.join(icon_dir, "pdf_show.png" if is_valid else "pdf_show_disabled.png")
+            ))
+            btn_show_pdf.setToolTip("Afficher PDF" if is_valid else "Impossible d'afficher PDF tant que le projet n'est pas validé")
+            btn_show_pdf.setFixedSize(28, 28)
+            btn_show_pdf.setStyleSheet("""
+                QPushButton {
+                    border: none;
+                    background: transparent;
+                }
+                QPushButton:focus, QPushButton:hover {
+                    background: #e6f0fa;
+                }
+            """)
+            btn_show_pdf.setEnabled(is_valid)
+            btn_show_pdf.clicked.connect(lambda _, pid=row['id']: self.show_pdf(pid))
+
+            h_layout.addWidget(btn_generate_pdf)
+            h_layout.addWidget(btn_show_pdf)
+            h_layout.addStretch()  # Ajoute un stretch après les boutons pour centrer
+
+            action_widget.setLayout(h_layout)
+            # Centre le widget dans la cellule
+            self.setCellWidget(i, len(self.COLUMNS), action_widget)
+            self.setRowHeight(i, 36)
         self.resizeColumnsToContents()
         self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+    def generate_pdf(self, project_id):
+        # Génère le PDF pour le projet sélectionné
+        try:
+            from pdf.generator import PDFGenerator
+            gen = PDFGenerator(self.parent().db)
+            import os
+            save_path = os.path.join(os.getcwd(), f"static/pdf_template/rapport_projet_{project_id}.pdf")
+            gen.generate_report(project_id, save_path)
+            QMessageBox.information(self, "PDF généré", f"Rapport enregistré ici : {save_path}", QMessageBox.Ok)
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur", f"Impossible de générer le PDF : {e}", QMessageBox.Ok)
+
+    def show_pdf(self, project_id):
+        pdf_path = os.path.join(os.getcwd(), f"static/pdf_template/rapport_projet_{project_id}.pdf")
+        if not os.path.exists(pdf_path):
+            QMessageBox.warning(self, "PDF manquant", f"Le PDF {pdf_path} n'existe pas.", QMessageBox.Ok)
+            return
+        url = QUrl.fromLocalFile(pdf_path)
+        if not QDesktopServices.openUrl(url):
+            QMessageBox.warning(self, "Erreur", f"Impossible d'ouvrir le PDF : {pdf_path}", QMessageBox.Ok)
 
     def get_selected_project_id(self):
         sel = self.currentRow()
@@ -128,7 +220,6 @@ class ProjectForm(QDialog):
             QPushButton:hover { background-color: #1c5ea3; color: #fff; }
             QPushButton:pressed { background-color: #14406e; }
         """)
-        from PyQt5.QtWidgets import QComboBox
 
         self.input_company  = QLineEdit()
         self.input_location = QLineEdit()
@@ -247,43 +338,57 @@ class ProjectWidget(QWidget):
         self.manager = ProjectManager(db)
         self.setStyleSheet("""
             QWidget { background-color: #e0e0e0; }
+            QPushButton {
+                background-color: #1c5ea3; color: #fff; border-radius: 8px;
+                padding: 8px 24px; font-weight: bold; font-size: 14px;
+            }
+            QPushButton:hover { background-color: #b8d5ed; color: #1c5ea3; }
             QTableWidget {
-                background-color: #fff; alternate-background-color: #fff;
+                background-color: #fff; 
+                alternate-background-color: #b8d5ed;
+                gridline-color: #1c5ea3; 
                 selection-background-color: #b8d5ed;
-                selection-color: #1c5ea3; border: 2px solid #1c5ea3; font-size: 15px;
+                selection-color: #1c5ea3; 
+                border: 2px solid #1c5ea3; 
+                font-size: 15px;
                 border-radius: 8px;
             }
             QHeaderView::section {
                 background-color: #1c5ea3; color: #fff; font-weight: bold;
-                border: none; padding: 6px;
+                border: none; padding: 6px; qproperty-alignment: 'AlignCenter | AlignVCenter';
             }
             QTableWidget::item {
                 border-bottom: 1px solid #b8d5ed;
                 border-right: 1px solid #b8d5ed;
             }
-            QPushButton {
-                background-color: #1c5ea3; color: #fff; border-radius: 8px;
-                padding: 8px 24px; font-weight: bold; font-size: 10px;
-            }
-            QPushButton:hover { background-color: #b8d5ed; color: #1c5ea3; }
         """)
+
         self.table = ProjectTable()
         self.table.setFocusPolicy(Qt.NoFocus)
+
         self.btn_add = QPushButton("Ajouter Projet")
+        self.btn_add.setToolTip("Ajouter Projet")
+        self.btn_add.setFixedHeight(36)
+
         self.btn_edit = QPushButton("Modifier Projet")
+        self.btn_edit.setToolTip("Modifier Projet")
+        self.btn_edit.setFixedHeight(36)
+
         self.btn_delete = QPushButton("Supprimer Projet")
-        self.btn_pdf = QPushButton("Générer un PDF")
+        self.btn_delete.setToolTip("Supprimer Projet")
+        self.btn_delete.setFixedHeight(36)
+
         self.btn_add.clicked.connect(self.add_project)
         self.btn_edit.clicked.connect(self.edit_project)
         self.btn_delete.clicked.connect(self.delete_project)
-        self.btn_pdf.clicked.connect(self.generer_pdf)
+
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
         btn_layout.addWidget(self.btn_add)
         btn_layout.addWidget(self.btn_edit)
         btn_layout.addWidget(self.btn_delete)
-        btn_layout.addWidget(self.btn_pdf)
         btn_layout.addStretch()
+
         layout = QVBoxLayout()
         layout.addWidget(self.table)
         layout.addLayout(btn_layout)
@@ -304,7 +409,6 @@ class ProjectWidget(QWidget):
         dialog = ProjectForm(self.db, self.user)
         if dialog.exec_() == QDialog.Accepted:
             self.refresh_projects()
-
 
     def edit_project(self):
         project_id = self.table.get_selected_project_id()
@@ -329,18 +433,3 @@ class ProjectWidget(QWidget):
                 self.refresh_projects()
             except Exception as e:
                 QMessageBox.critical(self, "Erreur", f"Impossible de supprimer le projet : {e}", QMessageBox.Ok)
-
-    def generer_pdf(self):
-        role = self.user['role']
-        if role != 'Administrateur':
-            QMessageBox.warning(self, "Accès refusé", "Seul un administrateur peut générer un PDF.", QMessageBox.Ok)
-            return
-        project_id = self.table.get_selected_project_id()
-        if project_id is None:
-            QMessageBox.warning(self, "Aucun projet", "Veuillez sélectionner un projet.", QMessageBox.Ok)
-            return
-        from pdf.generator import PDFGenerator
-        gen = PDFGenerator(self.db)
-        save_path = os.path.join(os.getcwd(), f"static/pdf_template/rapport_projet_{project_id}.pdf")
-        gen.generate_report(project_id, save_path)
-        QMessageBox.information(self, "PDF généré", f"Rapport enregistré ici : {save_path}", QMessageBox.Ok)

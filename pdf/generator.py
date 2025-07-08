@@ -1,6 +1,4 @@
 # pdf/generator.py
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 """
 pdf/generator.py

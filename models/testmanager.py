@@ -1,11 +1,5 @@
 # models/testmanager.py
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-models/testmanager.py
 
-Gestion de la saisie des tests et de leurs mesures.
-"""
 from typing import List, Tuple, Optional
 from datetime import date
 

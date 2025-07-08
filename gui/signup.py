@@ -1,3 +1,11 @@
+#gui/signup.py
+
+"""
+Fenêtre d'inscription pour l'application VDC Engineering MVP.
+Gère l'inscription des techniciens avec validation de compte par un administrateur.
+Gère la création de compte, la validation des données saisies et l'ouverture de la fenêtre de connexion.
+"""
+
 import sys
 import os
 import re
@@ -125,13 +133,8 @@ class SignupWindow(QWidget):
             QMessageBox.warning(self, "Erreur", "Les mots de passe ne correspondent pas.")
             return
 
-        if len(password) < 8:
-            QMessageBox.warning(self, "Erreur", "Le mot de passe doit contenir au moins 8 caractères.")
-            return
-
-        # Optionnel : vérification de complexité du mot de passe
-        if not re.search(r"[A-Z]", password) or not re.search(r"[a-z]", password) or not re.search(r"\d", password):
-            QMessageBox.warning(self, "Erreur", "Le mot de passe doit contenir au moins une majuscule, une minuscule et un chiffre.")
+        if len(password) < 6:
+            QMessageBox.warning(self, "Erreur", "Le mot de passe doit contenir au moins 6 caractères.")
             return
 
         try:

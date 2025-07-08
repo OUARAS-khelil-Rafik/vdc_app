@@ -1,4 +1,14 @@
 # gui/thresholds.py
+
+"""
+Fenêtre de gestion des seuils ISO et personnalisés pour l’application VDC Engineering MVP.
+Gère l’affichage, l’ajout, la modification et la suppression des seuils selon le rôle de l’utilisateur.
+Gère les seuils ISO prédéfinis selon la norme ISO 14644-1 et les seuils personnalisés.
+Gère la persistance des seuils dans une base de données SQLite.
+Gère les interactions utilisateur via une interface graphique PyQt5.
+"""
+
+
 from PyQt5.QtWidgets import (
     QWidget, QTableWidget, QTableWidgetItem, QVBoxLayout,
     QHBoxLayout, QMessageBox, QDialog, QHeaderView, QSizePolicy,

@@ -1,13 +1,8 @@
 # gui/dashboard.py
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 """
-gui/dashboard.py
-
 Tableau de bord principal de l’application VDC Engineering MVP.
-Affiche la liste des projets et propose les fonctionnalités disponibles
-selon le rôle de l’utilisateur (Administrateur, Technicien, Technicien premium).
+Affiche la liste des projets et propose les fonctionnalités disponibles selon le rôle de l’utilisateur (Administrateur, Technicien, Technicien premium).
 """
 
 from PyQt5.QtWidgets import (
@@ -15,12 +10,13 @@ from PyQt5.QtWidgets import (
     QHBoxLayout, QSizePolicy, QToolBar, QAction,
 )
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QIcon
 from .login import LoginWindow
 from .project import ProjectWidget
 from .thresholds import ThresholdsWidget
 from .users import UsersWidget
 from .test import TestsWidget
-from PyQt5.QtGui import QIcon
+
 
 class DashboardToolbar(QToolBar):
     def __init__(self, user, parent=None):

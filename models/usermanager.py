@@ -1,3 +1,5 @@
+# models/usermanager.py
+
 import sqlite3
 import hashlib
 

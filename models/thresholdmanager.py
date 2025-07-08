@@ -1,11 +1,5 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+# models/thresholdmanager.py
 
-"""
-models/thresholdmanager.py
-
-Gestion des seuils de conformité par projet et par nom de test.
-"""
 from typing import List, Dict, Any, Optional
 
 class ThresholdManager:

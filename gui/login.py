@@ -1,8 +1,6 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+# gui/login.py
 
 """
-gui/login.py
 Fenêtre de connexion pour l’application VDC Engineering MVP.
 Gère l’authentification des utilisateurs et leurs rôles
 (Administrateur, Technicien, Technicien premium).

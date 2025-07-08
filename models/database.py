@@ -1,11 +1,12 @@
-"""
-models/database.py
+# models/database.py
 
+"""
 Gestion de la base SQLite pour le MVP VDC Engineering :
 – Création des tables (users, projects, thresholds, tests, measurements)
 – Authentification des utilisateurs avec rôles
 – Gestion des mots de passe (hachage SHA-256)
 """
+
 import sqlite3
 import hashlib
 from typing import Optional, Dict, Any
