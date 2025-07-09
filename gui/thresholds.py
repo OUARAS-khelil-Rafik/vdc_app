@@ -24,55 +24,55 @@ import os
 # SEUILS ISO 14644-1:2015 – (concentrations maximales particules/m³)
 DEFAULT_ISO_THRESHOLDS = {
     "ISO 1": {
-        "Particles ≥0.1 µm": 10
+        "Particules ≥0.1 µm": 10
     },
     "ISO 2": {
-        "Particles ≥0.1 µm": 100,
-        "Particles ≥0.2 µm": 24,
-        "Particles ≥0.3 µm": 10
+        "Particules ≥0.1 µm": 100,
+        "Particules ≥0.2 µm": 24,
+        "Particules ≥0.3 µm": 10
     },
     "ISO 3": {
-        "Particles ≥0.1 µm": 1_000,
-        "Particles ≥0.2 µm": 237,
-        "Particles ≥0.3 µm": 102,
-        "Particles ≥0.5 µm": 35
+        "Particules ≥0.1 µm": 1_000,
+        "Particules ≥0.2 µm": 237,
+        "Particules ≥0.3 µm": 102,
+        "Particules ≥0.5 µm": 35
     },
     "ISO 4": {
-        "Particles ≥0.1 µm": 10_000,
-        "Particles ≥0.2 µm": 2_370,
-        "Particles ≥0.3 µm": 1_020,
-        "Particles ≥0.5 µm": 352,
-        "Particles ≥1 µm": 83
+        "Particules ≥0.1 µm": 10_000,
+        "Particules ≥0.2 µm": 2_370,
+        "Particules ≥0.3 µm": 1_020,
+        "Particules ≥0.5 µm": 352,
+        "Particules ≥1 µm": 83
     },
     "ISO 5": {
-        "Particles ≥0.1 µm": 100_000,
-        "Particles ≥0.2 µm": 23_700,
-        "Particles ≥0.3 µm": 10_200,
-        "Particles ≥0.5 µm": 3_520,
-        "Particles ≥1 µm": 832
+        "Particules ≥0.1 µm": 100_000,
+        "Particules ≥0.2 µm": 23_700,
+        "Particules ≥0.3 µm": 10_200,
+        "Particules ≥0.5 µm": 3_520,
+        "Particules ≥1 µm": 832
     },
     "ISO 6": {
-        "Particles ≥0.1 µm": 1_000_000,
-        "Particles ≥0.2 µm": 237_000,
-        "Particles ≥0.3 µm": 102_000,
-        "Particles ≥0.5 µm": 35_200,
-        "Particles ≥1 µm": 8_320,
-        "Particles ≥5 µm": 293
+        "Particules ≥0.1 µm": 1_000_000,
+        "Particules ≥0.2 µm": 237_000,
+        "Particules ≥0.3 µm": 102_000,
+        "Particules ≥0.5 µm": 35_200,
+        "Particules ≥1 µm": 8_320,
+        "Particules ≥5 µm": 293
     },
     "ISO 7": {
-        "Particles ≥0.5 µm": 352_000,
-        "Particles ≥1 µm": 83_200,
-        "Particles ≥5 µm": 2_930
+        "Particules ≥0.5 µm": 352_000,
+        "Particules ≥1 µm": 83_200,
+        "Particules ≥5 µm": 2_930
     },
     "ISO 8": {
-        "Particles ≥0.5 µm": 3_520_000,
-        "Particles ≥1 µm": 832_000,
-        "Particles ≥5 µm": 29_300
+        "Particules ≥0.5 µm": 3_520_000,
+        "Particules ≥1 µm": 832_000,
+        "Particules ≥5 µm": 29_300
     },
     "ISO 9": {
-        "Particles ≥0.5 µm": 35_200_000,
-        "Particles ≥1 µm": 8_320_000,
-        "Particles ≥5 µm": 293_000
+        "Particules ≥0.5 µm": 35_200_000,
+        "Particules ≥1 µm": 8_320_000,
+        "Particules ≥5 µm": 293_000
     },
 }
 
