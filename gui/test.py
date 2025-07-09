@@ -1,14 +1,77 @@
 from PyQt5.QtWidgets import (
     QWidget, QLabel, QVBoxLayout, QHBoxLayout,
     QComboBox, QPushButton, QTableWidget, QTableWidgetItem,
-    QLineEdit, QMessageBox, QHeaderView, QSizePolicy
+    QLineEdit, QMessageBox, QHeaderView, QSizePolicy,
+    QDialog, QFormLayout, QDateEdit
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor
 from datetime import datetime
 
 from models.projectmanager import ProjectManager
 from models.testmanager    import TestManager
+
+class AddEquipmentDialog(QDialog):
+    def __init__(self, parent, tm: TestManager, test_id: int):
+        super().__init__(parent)
+        self.tm = tm
+        self.test_id = test_id
+        self.setWindowTitle("Ajouter un équipement")
+        self.setModal(True)
+        self.resize(320, 180)
+        self.setStyleSheet("""
+            QDialog { background-color: #f0f0f0; }
+            QLabel { color: #1c5ea3; font-weight: bold; font-size: 14px; }
+            QLineEdit, QDateEdit {
+                background: #fff; border: 1px solid #b8d5ed; border-radius: 5px;
+                padding: 4px; font-size: 13px;
+            }
+            QPushButton {
+                background-color: #1c5ea3; color: #fff; border-radius: 6px;
+                padding: 6px 18px; font-weight: bold; font-size: 14px;
+            }
+            QPushButton:hover { background-color: #b8d5ed; color: #1c5ea3; }
+        """)
+
+        form = QFormLayout()
+        self.input_name = QLineEdit()
+        self.input_name.setPlaceholderText("Nom de l'équipement")
+        self.input_date = QDateEdit(calendarPopup=True)
+        self.input_date.setDate(QDate.currentDate())
+        self.input_date.setDisplayFormat("yyyy-MM-dd")
+        self.input_periodicity = QLineEdit()
+        self.input_periodicity.setPlaceholderText("Mensuelle, Trimestrielle, etc.")
+
+        form.addRow("Équipement :", self.input_name)
+        form.addRow("Dernier étalonnage :", self.input_date)
+        form.addRow("Périodicité     :", self.input_periodicity)
+
+        btn_save   = QPushButton("Enregistrer")
+        btn_cancel = QPushButton("Annuler")
+        btn_save.clicked.connect(self._save)
+        btn_cancel.clicked.connect(self.reject)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        btn_layout.addWidget(btn_save)
+        btn_layout.addWidget(btn_cancel)
+
+        v = QVBoxLayout(self)
+        v.addLayout(form)
+        v.addLayout(btn_layout)
+
+    def _save(self):
+        name = self.input_name.text().strip()
+        date_str = self.input_date.date().toString("yyyy-MM-dd")
+        periodicity = self.input_periodicity.text().strip()
+        if not name or not periodicity:
+            QMessageBox.warning(self, "Champs manquants",
+                                "Veuillez renseigner tous les champs.",
+                                QMessageBox.Ok)
+            return
+        self.tm.add_equipment(self.test_id, name, date_str, periodicity)
+        self.accept()
+
 
 class TestSessionWidget(QWidget):
     def __init__(self, db, user, parent=None):
@@ -35,30 +98,21 @@ class TestSessionWidget(QWidget):
                 border: 2px solid #1c5ea3;
             }
             QComboBox#projectCombo QAbstractItemView {
-                background: #fff;
-                color: #1c5ea3;
+                background: #fff; color: #1c5ea3;
                 selection-background-color: #b8d5ed;
-                selection-color: #1c5ea3;
-                border-radius: 8px;
+                selection-color: #1c5ea3; border-radius: 8px;
                 font-size: 14px;
             }
             QTableWidget {
-                background-color: #fff; 
-                alternate-background-color: #b8d5ed;
-                gridline-color: #1c5ea3; 
-                selection-background-color: #b8d5ed;
-                selection-color: #1c5ea3; 
-                border: 2px solid #1c5ea3; 
-                font-size: 15px;
-                border-radius: 8px;
+                background-color: #fff; alternate-background-color: #b8d5ed;
+                gridline-color: #1c5ea3; selection-background-color: #b8d5ed;
+                selection-color: #1c5ea3; border: 2px solid #1c5ea3;
+                font-size: 15px; border-radius: 8px;
             }
             QHeaderView::section {
                 background-color: #1c5ea3; color: #fff; font-weight: bold;
-                border: none; padding: 6px; qproperty-alignment: 'AlignCenter | AlignVCenter';
-            }
-            QTableWidget::item {
-                border-bottom: 1px solid #b8d5ed;
-                border-right: 1px solid #b8d5ed;
+                border: none; padding: 6px;
+                qproperty-alignment: 'AlignCenter | AlignVCenter';
             }
             QLineEdit, QDateEdit {
                 background: #fff; border: 1px solid #b8d5ed; border-radius: 4px;
@@ -68,9 +122,9 @@ class TestSessionWidget(QWidget):
             QLabel { color: #1c5ea3; font-weight: bold; font-size: 13px; }
         """)
 
-        # Label for project selection
-        self.lbl_choose = QLabel("Choisit projet :")
-        self.lbl_choose.setStyleSheet("font-weight: bold; font-size: 20px; color: #1c5ea3; background: transparent;")
+        # Sélection de projet
+        self.lbl_choose = QLabel("Choisissez le projet :")
+        self.lbl_choose.setStyleSheet("font-weight: bold; font-size: 20px; color: #1c5ea3;")
 
         self.combo = QComboBox(self)
         self.combo.setObjectName("projectCombo")
@@ -84,38 +138,44 @@ class TestSessionWidget(QWidget):
         self.table = TestSessionTable()
         self.table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        self.btn_save   = QPushButton("Enregistrer les mesures")
-        self.btn_modify = QPushButton("Modifier les mesures")
-        self.btn_save.setFixedHeight(36)
-        self.btn_modify.setFixedHeight(36)
+        self.btn_save          = QPushButton("Enregistrer les mesures")
+        self.btn_modify        = QPushButton("Modifier les mesures")
+        self.btn_add_equipment = QPushButton("Ajouter équipement")
+        for btn in (self.btn_save, self.btn_modify, self.btn_add_equipment):
+            btn.setFixedHeight(36)
         self.btn_save.clicked.connect(self._save_measurements)
         self.btn_modify.clicked.connect(self._enable_editing)
+        self.btn_add_equipment.clicked.connect(self._open_add_equipment)
 
+        # Layout principal
         v = QVBoxLayout(self)
-        # --- Combo and label left-aligned, lbl_points right-aligned in a horizontal layout ---
         h_combo = QHBoxLayout()
         h_combo.addWidget(self.lbl_choose)
         h_combo.addWidget(self.combo)
         h_combo.addStretch()
         h_combo.addWidget(self.lbl_points)
         v.addLayout(h_combo)
-        # -------------------------------------------------
         v.addWidget(self.table, stretch=1)
-        h = QHBoxLayout()
-        h.addStretch()
-        h.addWidget(self.btn_save)
-        h.addWidget(self.btn_modify)
-        h.addStretch()
-        v.addLayout(h)
+
+        # Boutons
+        h_buttons = QHBoxLayout()
+        h_buttons.addStretch()
+        h_buttons.addWidget(self.btn_add_equipment)
+        h_buttons.addWidget(self.btn_save)
+        h_buttons.addWidget(self.btn_modify)
+        h_buttons.addStretch()
+        v.addLayout(h_buttons)
 
         self.btn_save.hide()
         self.btn_modify.show()
+        self.btn_add_equipment.hide()
         self.refresh()
 
     def refresh(self):
         self.current_test_id = None
         self.btn_save.hide()
         self.btn_modify.show()
+        self.btn_add_equipment.hide()
 
         all_p = self.pm.get_projects()
         if self.user['role'] == 'Administrateur':
@@ -129,32 +189,34 @@ class TestSessionWidget(QWidget):
             label = f"{p['company_name']} – {p['room_type']} ({p['cleanroom_area']} m²)"
             self.combo.addItem(label, p["id"])
         self.combo.blockSignals(False)
-
         self._on_project_changed(self.combo.currentIndex())
 
     def _on_project_changed(self, idx):
         self.current_test_id = None
         self.btn_save.hide()
         self.btn_modify.show()
+        self.btn_add_equipment.hide()
 
         if idx < 0 or idx >= len(self.projects):
             return
 
-        project_id = self.combo.itemData(idx)
         proj       = self.projects[idx]
+        project_id = proj["id"]
         area       = proj["cleanroom_area"]
         iso_class  = proj["iso_class"]
 
-        # Hide modify button if project is validated
+        # Affichage/masquage des actions
         if proj.get("validation_status") == "Validé":
             self.btn_modify.hide()
+            self.btn_add_equipment.hide()
         else:
             self.btn_modify.show()
+            self.btn_add_equipment.show()
 
         needed = self.tm.get_required_points(project_id)
         self.lbl_points.setText(f"Surface = {area} m² • {needed} points requis")
 
-        rows = self.db.conn.execute(
+        rows   = self.db.conn.execute(
             "SELECT test_name FROM thresholds WHERE iso_name = ?", (iso_class,)
         ).fetchall()
         params = [r["test_name"] for r in rows]
@@ -170,7 +232,6 @@ class TestSessionWidget(QWidget):
         else:
             self.table.init_empty(needed, len(headers))
 
-        # Ajuster la taille de la table à la fenêtre après chaque changement de projet
         self.table.resizeColumnsToContents()
         self.table.resizeRowsToContents()
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
@@ -199,16 +260,16 @@ class TestSessionWidget(QWidget):
                 le = self.table.cellWidget(r, c)
                 txt = le.text().strip()
                 if not txt:
-                    QMessageBox.warning(
-                        self, "Champs manquants",
-                        f"Mesure manquante pour {pt} → {param}", QMessageBox.Ok)
+                    QMessageBox.warning(self, "Champs manquants",
+                                        f"Mesure manquante pour {pt} → {param}",
+                                        QMessageBox.Ok)
                     return
                 try:
                     val = float(txt)
                 except ValueError:
-                    QMessageBox.warning(
-                        self, "Valeur incorrecte",
-                        f"Valeur non numérique pour {pt} → {param}", QMessageBox.Ok)
+                    QMessageBox.warning(self, "Valeur incorrecte",
+                                        f"Valeur non numérique pour {pt} → {param}",
+                                        QMessageBox.Ok)
                     return
                 measurements.append((pt, param, val, le.property("measurement_id")))
 
@@ -227,6 +288,19 @@ class TestSessionWidget(QWidget):
         self.btn_save.hide()
         self.btn_modify.show()
         self._on_project_changed(self.combo.currentIndex())
+
+    def _open_add_equipment(self):
+        if not self.current_test_id:
+            QMessageBox.warning(self, "Erreur",
+                                "Aucune session de test disponible.\n"
+                                "Enregistrez d'abord les mesures.",
+                                QMessageBox.Ok)
+            return
+        dlg = AddEquipmentDialog(self, self.tm, self.current_test_id)
+        if dlg.exec_() == QDialog.Accepted:
+            QMessageBox.information(self, "Succès",
+                                    "Équipement enregistré avec succès.",
+                                    QMessageBox.Ok)
 
 
 class TestSessionTable(QTableWidget):

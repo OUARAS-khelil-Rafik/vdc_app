@@ -1,3 +1,5 @@
+# models/testmanager.py
+
 from typing import List, Tuple, Optional
 from datetime import date
 from .thresholdmanager import ThresholdManager
@@ -96,3 +98,37 @@ class TestManager:
             (admin_id, date.today().isoformat(), test_id)
         )
         self.db.conn.commit()
+
+    # ----------------------------------------------------------------
+    # Gestion de l'équipement
+    # ----------------------------------------------------------------
+
+    def add_equipment(
+        self,
+        test_id: int,
+        name: str,
+        calibration_date: str,
+        periodicity: str
+    ) -> int:
+        """
+        Crée un enregistrement d'équipement pour une session de test.
+        """
+        return self.db.add_equipment(test_id, name, calibration_date, periodicity)
+
+    def get_equipments(self, test_id: int) -> List[dict]:
+        """
+        Liste les équipements d'une session.
+        """
+        return self.db.get_equipments(test_id)
+
+    def update_equipment(
+        self,
+        equipment_id: int,
+        name: str,
+        calibration_date: str,
+        periodicity: str
+    ) -> None:
+        """
+        Met à jour les infos d'un équipement.
+        """
+        self.db.update_equipment(equipment_id, name, calibration_date, periodicity)

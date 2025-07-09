@@ -2,15 +2,15 @@
 
 """
 Gestion de la base SQLite pour le MVP VDC Engineering :
-– Création des tables (users, projects, thresholds, tests, measurements)
+– Création des tables (users, projects, thresholds, tests, measurements, equipment)
 – Authentification des utilisateurs avec rôles
 – Gestion des mots de passe (hachage SHA-256)
-– Nouvelles méthodes pour enregistrer les sessions de tests et leurs mesures
+– Nouvelles méthodes pour enregistrer les sessions de tests, leurs mesures et équipements
 """
 
 import sqlite3
 import hashlib
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 class Database:
     def __init__(self, db_path: str):
@@ -97,6 +97,18 @@ class Database:
             );
             """)
 
+            # Equipements des tests
+            self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS equipment (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                test_id          INTEGER NOT NULL,
+                name             TEXT    NOT NULL,
+                calibration_date TEXT    NOT NULL,
+                periodicity      TEXT    NOT NULL,
+                FOREIGN KEY(test_id) REFERENCES tests(id)
+            );
+            """)
+
     def _hash_password(self, password: str) -> str:
         """
         Retourne le hash SHA-256 de la chaîne fournie.
@@ -149,10 +161,6 @@ class Database:
             }
         return None
 
-    # ----------------------------------------------------------------
-    # Nouvelles méthodes pour enregistrer les tests et mesures
-    # ----------------------------------------------------------------
-
     def create_test(
         self,
         project_id: int,
@@ -185,5 +193,55 @@ class Database:
             "INSERT INTO measurements (test_id, point_name, parameter, value) "
             "VALUES (?, ?, ?, ?)",
             (test_id, point_name, parameter, value)
+        )
+        self.conn.commit()
+
+    # ----------------------------------------------------------------
+    # Méthodes pour l'équipement
+    # ----------------------------------------------------------------
+
+    def add_equipment(
+        self,
+        test_id: int,
+        name: str,
+        calibration_date: str,
+        periodicity: str
+    ) -> int:
+        """
+        Ajoute un équipement pour une session de test.
+        """
+        cursor = self.conn.execute(
+            "INSERT INTO equipment (test_id, name, calibration_date, periodicity) "
+            "VALUES (?, ?, ?, ?)",
+            (test_id, name, calibration_date, periodicity)
+        )
+        self.conn.commit()
+        return cursor.lastrowid
+
+    def get_equipments(self, test_id: int) -> List[Dict[str, Any]]:
+        """
+        Récupère tous les équipements liés à une session de test.
+        """
+        rows = self.conn.execute(
+            "SELECT id, name, calibration_date, periodicity "
+            "FROM equipment WHERE test_id = ?",
+            (test_id,)
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def update_equipment(
+        self,
+        equipment_id: int,
+        name: str,
+        calibration_date: str,
+        periodicity: str
+    ) -> None:
+        """
+        Met à jour un équipement existant.
+        """
+        self.conn.execute(
+            "UPDATE equipment SET name = ?, calibration_date = ?, periodicity = ? "
+            "WHERE id = ?",
+            (name, calibration_date, periodicity, equipment_id)
         )
         self.conn.commit()
