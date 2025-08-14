@@ -35,7 +35,7 @@ class Database:
                 password_hash   TEXT NOT NULL,
                 full_name       TEXT NOT NULL,
                 role            TEXT NOT NULL
-                                 CHECK(role IN ('Administrateur','Technicien','Technicien premium')),
+                                 CHECK(role IN ('Administrateur','Technicien','Superviseur', 'Technicien responsable')),
                 email           TEXT UNIQUE NOT NULL
                                  CHECK(email GLOB '*@*.*'),
                 phone_number    TEXT NOT NULL,

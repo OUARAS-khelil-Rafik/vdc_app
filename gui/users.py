@@ -58,13 +58,15 @@ class UserForm(QDialog):
         self.email_edit = QLineEdit()
         self.phone_edit = QLineEdit()
         self.role_combo = QComboBox()
-        self.role_combo.addItems(["Technicien premium", "Technicien", "Administrateur"])
+        # Nouvelles valeurs de rôle alignées sur la contrainte CHECK du schéma
+        allowed_roles = ["Technicien responsable", "Technicien", "Superviseur", "Administrateur"]
+        self.role_combo.addItems(allowed_roles)
 
         if self.user:
             # user = (id, username, full_name, role, email, phone_number, validate_user)
             self.username_edit.setText(self.user[1] or "")
             self.fullname_edit.setText(self.user[2] or "")
-            if self.user[3] not in ["Technicien premium", "Technicien", "Administrateur"]:
+            if self.user[3] not in allowed_roles and self.user[3]:
                 self.role_combo.addItem(self.user[3])
             self.role_combo.setCurrentText(self.user[3] or "")
             self.email_edit.setText(self.user[4] or "")
@@ -250,21 +252,41 @@ class UsersWidget(QWidget):
         users = UserManager.fetch_users()
         self.table.populate(users)
 
+    def _is_valid_email(self, email: str) -> bool:
+        return bool(email) and ("@" in email and "." in email.split("@")[-1])
+
     def add_user(self):
         form = UserForm(self)
         if form.exec_() == QDialog.Accepted:
             username, password, full_name, role, email, phone, validation = form.get_data()
-            if not username or not password or not full_name or not role:
-                QMessageBox.warning(self, "Erreur", "Veuillez remplir au minimum le nom d'utilisateur, le mot de passe, le nom complet et le rôle.")
+            # Champs obligatoires selon le schéma (NOT NULL + contraintes)
+            if not username or not password or not full_name or not role or not email or not phone:
+                QMessageBox.warning(self, "Erreur", "Veuillez remplir le nom d'utilisateur, le mot de passe, le nom complet, le rôle, l'email et le téléphone.")
+                return
+            if not self._is_valid_email(email):
+                QMessageBox.warning(self, "Erreur", "L'email n'est pas valide.")
+                return
+            # Rôles autorisés
+            if role not in {"Administrateur", "Technicien", "Superviseur", "Technicien responsable"}:
+                QMessageBox.warning(self, "Erreur", "Rôle invalide.")
                 return
             if UserManager.username_exists(username):
                 QMessageBox.warning(self, "Erreur", "Ce nom d'utilisateur existe déjà.")
                 return
             validate_user = "Validé" if validation == "Validé" else "Non validé"
-            # Email et téléphone facultatifs: passer des chaînes vides si non fournis
-            email = email or ""
-            phone = phone or ""
-            UserManager.add_user(username, password, full_name, role, email, phone, validate_user)
+            try:
+                UserManager.add_user(username, password, full_name, role, email, phone, validate_user)
+            except sqlite3.IntegrityError as e:
+                msg = str(e)
+                if "users.username" in msg:
+                    QMessageBox.warning(self, "Erreur", "Ce nom d'utilisateur existe déjà.")
+                elif "users.email" in msg:
+                    QMessageBox.warning(self, "Erreur", "Cet email existe déjà.")
+                elif "CHECK" in msg:
+                    QMessageBox.warning(self, "Erreur", "Les données ne respectent pas les contraintes (rôle/validation/email).")
+                else:
+                    QMessageBox.warning(self, "Erreur", "Impossible d'ajouter l'utilisateur.")
+                return
             self.refresh_users()
 
     def edit_user(self):
@@ -286,16 +308,33 @@ class UsersWidget(QWidget):
         form = UserForm(self, user=(user_id, username, full_name, role, email, phone, validation))
         if form.exec_() == QDialog.Accepted:
             new_username, new_password, new_full_name, new_role, new_email, new_phone, new_validation = form.get_data()
-            if not new_role or not new_full_name or not new_username:
-                QMessageBox.warning(self, "Erreur", "Veuillez remplir le nom d'utilisateur, le nom complet et le rôle.")
+            # Mot de passe facultatif ici (non géré par UserManager.update_user), mais les autres champs sont requis
+            if not new_role or not new_full_name or not new_username or not new_email or not new_phone:
+                QMessageBox.warning(self, "Erreur", "Veuillez remplir le nom d'utilisateur, le nom complet, le rôle, l'email et le téléphone.")
+                return
+            if not self._is_valid_email(new_email):
+                QMessageBox.warning(self, "Erreur", "L'email n'est pas valide.")
+                return
+            if new_role not in {"Administrateur", "Technicien", "Superviseur", "Technicien responsable"}:
+                QMessageBox.warning(self, "Erreur", "Rôle invalide.")
                 return
             if UserManager.username_exists(new_username, exclude_id=user_id):
                 QMessageBox.warning(self, "Erreur", "Ce nom d'utilisateur existe déjà.")
                 return
             validate_user = "Validé" if new_validation == "Validé" else "Non validé"
-            new_email = new_email or ""
-            new_phone = new_phone or ""
-            UserManager.update_user(user_id, new_username, new_full_name, new_role, new_email, new_phone, validate_user)
+            try:
+                UserManager.update_user(user_id, new_username, new_full_name, new_role, new_email, new_phone, validate_user)
+            except sqlite3.IntegrityError as e:
+                msg = str(e)
+                if "users.username" in msg:
+                    QMessageBox.warning(self, "Erreur", "Ce nom d'utilisateur existe déjà.")
+                elif "users.email" in msg:
+                    QMessageBox.warning(self, "Erreur", "Cet email existe déjà.")
+                elif "CHECK" in msg:
+                    QMessageBox.warning(self, "Erreur", "Les données ne respectent pas les contraintes (rôle/validation/email).")
+                else:
+                    QMessageBox.warning(self, "Erreur", "Impossible de modifier l'utilisateur.")
+                return
             # Note: la mise à jour du mot de passe n'est pas gérée ici (méthode non prévue par UserManager)
             self.refresh_users()
 
@@ -340,5 +379,9 @@ class UsersWidget(QWidget):
         btn_no.clicked.connect(dialog.reject)
 
         if dialog.exec_() == QDialog.Accepted:
-            UserManager.delete_user(user_id)
+            try:
+                UserManager.delete_user(user_id)
+            except sqlite3.IntegrityError:
+                QMessageBox.warning(self, "Erreur", "Impossible de supprimer l'utilisateur.")
+                return
             self.refresh_users()

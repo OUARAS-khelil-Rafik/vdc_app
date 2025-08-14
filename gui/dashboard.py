@@ -86,21 +86,24 @@ class DashboardWindow(QMainWindow):
         self.toolbar = DashboardToolbar(self.user)
         self.addToolBar(Qt.TopToolBarArea, self.toolbar)
 
-        # Connecte les actions
+        # Connecte les actions de base
         self.toolbar.actions_dict['projects'].triggered.connect(self.show_projects)
         self.toolbar.actions_dict['tests'].triggered.connect(self.show_tests)
-        if self.user.get('role') in ('Administrateur', 'Technicien premium'):
-            self.toolbar.actions_dict['thresholds'].setVisible(True)
-            self.toolbar.actions_dict['thresholds'].triggered.connect(self.show_thresholds)
-        else:
-            self.toolbar.actions_dict['thresholds'].setVisible(False)
         self.toolbar.actions_dict['logout'].triggered.connect(self.logout)
 
-        if self.user.get('role', '').lower() == 'administrateur':
-            self.toolbar.actions_dict['users'].setVisible(True)
+        # Logique des rôles
+        role = (self.user.get('role') or '').strip().lower()
+        # Seuils: Administrateur, Superviseur, Technicien responsable
+        thresholds_allowed = role in {'administrateur', 'superviseur', 'technicien responsable'}
+        self.toolbar.actions_dict['thresholds'].setVisible(thresholds_allowed)
+        if thresholds_allowed:
+            self.toolbar.actions_dict['thresholds'].triggered.connect(self.show_thresholds)
+
+        # Utilisateurs: seulement Administrateur
+        users_allowed = role == 'administrateur'
+        self.toolbar.actions_dict['users'].setVisible(users_allowed)
+        if users_allowed:
             self.toolbar.actions_dict['users'].triggered.connect(self.show_users)
-        else:
-            self.toolbar.actions_dict['users'].setVisible(False)
 
         # Conteneur central
         self.central = QWidget()
@@ -142,7 +145,6 @@ class DashboardWindow(QMainWindow):
         self.users_widget.hide()
 
     def show_tests(self):
-        # Rafraîchit entièrement le widget de tests (conserve valeurs en base)
         self.project_widget.hide()
         self.thresholds_widget.hide()
         self.users_widget.hide()
