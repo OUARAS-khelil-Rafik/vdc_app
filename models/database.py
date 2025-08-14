@@ -36,6 +36,9 @@ class Database:
                 full_name       TEXT NOT NULL,
                 role            TEXT NOT NULL
                                  CHECK(role IN ('Administrateur','Technicien','Technicien premium')),
+                email           TEXT UNIQUE NOT NULL
+                                 CHECK(email GLOB '*@*.*'),
+                phone_number    TEXT NOT NULL,
                 validate_user   TEXT NOT NULL DEFAULT 'Non validé'
                                  CHECK(validate_user IN ('Validé','Non validé'))
             );
@@ -121,43 +124,51 @@ class Database:
         password: str,
         full_name: str,
         role: str,
+        email: str,
+        phone_number: str,
         validate_user: str = "Non validé"
     ) -> int:
         """
-        Crée un nouvel utilisateur et renvoie son ID.
+        Crée un nouvel utilisateur (avec email et téléphone obligatoires) et renvoie son ID.
         """
+        # Validation du numéro de téléphone (obligatoire, non vide)
+        if phone_number is None or str(phone_number).strip() == "":
+            raise ValueError("Le numéro de téléphone est obligatoire.")
+        phone_number = str(phone_number).strip()
+
         pwd_hash = self._hash_password(password)
         with self.conn:
             cursor = self.conn.execute(
-                "INSERT INTO users (username, password_hash, full_name, role, validate_user) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (username, pwd_hash, full_name, role, validate_user)
+                "INSERT INTO users (username, password_hash, full_name, role, email, phone_number, validate_user) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (username, pwd_hash, full_name, role, email, phone_number, validate_user)
             )
             return cursor.lastrowid
 
     def authenticate_user(
         self,
-        username: str,
+        username_or_email: str,
         password: str
     ) -> Optional[Dict[str, Any]]:
         """
-        Vérifie les identifiants, et renvoie un dict contenant les infos utilisateur
-        si OK, ou None sinon.
+        Authentifie un utilisateur avec son username OU son email.
+        Ne renvoie un dict que si l'utilisateur est 'Validé'.
         """
         pwd_hash = self._hash_password(password)
-        cursor = self.conn.execute(
-            "SELECT id, username, full_name, role "
+        row = self.conn.execute(
+            "SELECT id, username, full_name, role, email, phone_number "
             "FROM users "
-            "WHERE username = ? AND password_hash = ? AND validate_user = 'Validé'",
-            (username, pwd_hash)
-        )
-        row = cursor.fetchone()
+            "WHERE (username = ? OR email = ?) AND password_hash = ? AND validate_user = 'Validé'",
+            (username_or_email, username_or_email, pwd_hash)
+        ).fetchone()
         if row:
             return {
                 "id": row["id"],
                 "username": row["username"],
                 "full_name": row["full_name"],
-                "role": row["role"]
+                "role": row["role"],
+                "email": row["email"],
+                "phone_number": row["phone_number"],
             }
         return None
 

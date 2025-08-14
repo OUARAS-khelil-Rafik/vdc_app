@@ -26,7 +26,6 @@ class LoginWindow(QWidget):
         self.center_window()
 
     def center_window(self):
-        # Center the window on the screen
         screen = QApplication.primaryScreen()
         if screen:
             screen_geometry = screen.availableGeometry()
@@ -67,9 +66,9 @@ class LoginWindow(QWidget):
         layout.setSpacing(15)
         layout.setContentsMargins(30, 30, 30, 30)
 
-        self.label_username = QLabel("Nom d'utilisateur :")
+        self.label_username = QLabel("Nom d'utilisateur ou Email :")
         self.input_username = QLineEdit()
-        self.input_username.setPlaceholderText("Entrez votre nom d'utilisateur")
+        self.input_username.setPlaceholderText("Entrez votre nom d'utilisateur ou votre email")
         layout.addWidget(self.label_username)
         layout.addWidget(self.input_username)
 
@@ -106,9 +105,9 @@ class LoginWindow(QWidget):
         self.setLayout(layout)
 
     def _handle_login(self):
-        username = self.input_username.text().strip()
+        login_value = self.input_username.text().strip()
         password = self.input_password.text()
-        if not username or not password:
+        if not login_value or not password:
             QMessageBox.warning(
                 self,
                 "Champs manquants",
@@ -117,7 +116,28 @@ class LoginWindow(QWidget):
             )
             return
 
-        user = self.db.authenticate_user(username, password)
+        # Try to authenticate using username or email
+        user = None
+        try:
+            # If DB supports a unified method that accepts username or email
+            user = self.db.authenticate_user(login_value, password)
+        except Exception:
+            user = None
+
+        # If not authenticated and it's likely an email, try email-specific method if available
+        if user is None and "@" in login_value and hasattr(self.db, "authenticate_user_by_email"):
+            try:
+                user = self.db.authenticate_user_by_email(login_value, password)
+            except Exception:
+                user = None
+
+        # If still not authenticated and a username-specific method exists, try it
+        if user is None and hasattr(self.db, "authenticate_user_by_username"):
+            try:
+                user = self.db.authenticate_user_by_username(login_value, password)
+            except Exception:
+                user = None
+
         self.input_password.clear()
         if user is not None:
             from gui.dashboard import DashboardWindow
@@ -128,7 +148,7 @@ class LoginWindow(QWidget):
             QMessageBox.warning(
                 self,
                 "Erreur d’authentification",
-                "Nom d'utilisateur, mot de passe ou validation incorrects.",
+                "Nom d'utilisateur, email, mot de passe ou validation incorrects.",
                 QMessageBox.Ok
             )
 

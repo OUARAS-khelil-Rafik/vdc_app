@@ -15,11 +15,13 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
+from models.usermanager import UserManager
+
 class SignupWindow(QWidget):
     def __init__(self, db):
         super().__init__()
-        self.setWindowTitle("Technicien - Inscription")
-        self.setFixedSize(350, 430)
+        self.setWindowTitle("Inscription")
+        self.setFixedSize(400, 600)
         self.setWindowFlag(Qt.WindowStaysOnTopHint)
         # Center the window using QScreen
         screen = QApplication.primaryScreen()
@@ -76,6 +78,18 @@ class SignupWindow(QWidget):
         layout.addWidget(self.username_label)
         layout.addWidget(self.username_input)
 
+        self.email_label = QLabel("Email :")
+        self.email_input = QLineEdit()
+        self.email_input.setPlaceholderText("exemple@domaine.com")
+        layout.addWidget(self.email_label)
+        layout.addWidget(self.email_input)
+
+        self.phone_label = QLabel("Numéro de téléphone :")
+        self.phone_input = QLineEdit()
+        self.phone_input.setPlaceholderText("Entrez votre numéro de téléphone")
+        layout.addWidget(self.phone_label)
+        layout.addWidget(self.phone_input)
+
         self.password_label = QLabel("Mot de passe :")
         self.password_input = QLineEdit()
         self.password_input.setPlaceholderText("Entrez votre mot de passe")
@@ -118,15 +132,26 @@ class SignupWindow(QWidget):
     def handle_signup(self):
         full_name = self.fullname_input.text().strip()
         username = self.username_input.text().strip()
+        email = self.email_input.text().strip()
+        phone = self.phone_input.text().strip()
         password = self.password_input.text()
         confirm = self.confirm_input.text()
 
-        if not full_name or not username or not password or not confirm:
-            QMessageBox.warning(self, "Erreur", "Tous les champs sont obligatoires.")
+        if not full_name or not username or not email or not phone or not password or not confirm:
+            QMessageBox.warning(self, "Erreur", "Tous les champs obligatoires doivent être remplis.")
             return
 
         if not re.match(r"^[A-Za-z0-9_.-]{3,20}$", username):
             QMessageBox.warning(self, "Erreur", "Le nom d'utilisateur doit contenir uniquement des lettres, chiffres, points, tirets ou underscores (3-20 caractères).")
+            return
+
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+            QMessageBox.warning(self, "Erreur", "Adresse e-mail invalide.")
+            return
+
+        # Validation basique du numéro de téléphone
+        if not re.match(r"^\+?[0-9\s().-]{6,20}$", phone):
+            QMessageBox.warning(self, "Erreur", "Numéro de téléphone invalide.")
             return
 
         if password != confirm:
@@ -137,14 +162,23 @@ class SignupWindow(QWidget):
             QMessageBox.warning(self, "Erreur", "Le mot de passe doit contenir au moins 6 caractères.")
             return
 
+        # Check for duplicates before insertion
+        if UserManager.username_exists(username):
+            QMessageBox.warning(self, "Erreur", "Nom d'utilisateur déjà existant.")
+            return
+        # Optionally check email uniqueness if UserManager.email_exists exists; otherwise rely on DB UNIQUE constraint handled in try/except below.
+        if hasattr(UserManager, "email_exists") and UserManager.email_exists(email):
+            QMessageBox.warning(self, "Erreur", "Adresse e-mail déjà utilisée.")
+            return
+
         try:
-            # La colonne validate_user est 'Non validé' par défaut
-            # La colonne role doit être 'Technicien' ici
-            self.db.create_user(
+            UserManager.add_user(
                 username=username,
                 password=password,
-                role="Technicien",
                 full_name=full_name,
+                role="Technicien",
+                email=email,
+                phone_number=phone,
                 validate_user="Non validé"
             )
             QMessageBox.information(
@@ -154,8 +188,13 @@ class SignupWindow(QWidget):
             )
             self.open_login()
         except Exception as e:
-            if "UNIQUE constraint failed" in str(e):
+            msg = str(e)
+            if "UNIQUE constraint failed: users.username" in msg:
                 QMessageBox.warning(self, "Erreur", "Nom d'utilisateur déjà existant.")
+            elif "UNIQUE constraint failed: users.email" in msg:
+                QMessageBox.warning(self, "Erreur", "Adresse e-mail déjà utilisée.")
+            elif "CHECK constraint failed" in msg:
+                QMessageBox.warning(self, "Erreur", "Les données saisies ne respectent pas les contraintes.")
             else:
                 QMessageBox.warning(self, "Erreur", f"Erreur lors de l'inscription : {e}")
 
