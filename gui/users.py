@@ -1,11 +1,28 @@
 # gui/users.py
 
 """
-Fenêtre de gestion des utilisateurs pour l'application VDC Engineering MVP.
-Gère l'affichage, l'ajout, la modification et la suppression des utilisateurs.
-Gère les rôles (Administrateur, Technicien, Technicien premium) et la validation des comptes.
-Gère la persistance des utilisateurs dans une base de données SQLite.
-Gère les interactions utilisateur via une interface graphique PyQt5.
+Module GUI de gestion des utilisateurs pour VDC Engineering (MVP).
+
+Fonctionnalités :
+- Affichage, ajout, modification et suppression d'utilisateurs.
+- Rôles autorisés : Administrateur, Technicien, Technicien responsable, Superviseur.
+- Validation des comptes : « Validé » / « Non validé ».
+- Contraintes : unicité du nom d'utilisateur et de l'email, rôles/validation conformes au schéma SQLite.
+- Protection : les comptes Administrateur ne peuvent pas être modifiés ni supprimés via l'interface.
+- Vérification simple du format d'email.
+
+Composants :
+- NoFocusTableWidget : QTableWidget sans focus.
+- UserForm : boîte de dialogue de création/édition d’utilisateur.
+- UsersTable : tableau des utilisateurs (colonnes : id, username, full_name, role, email, phone_number, validate_user).
+- UsersWidget : conteneur principal avec actions (ajouter, modifier, supprimer).
+
+Persistance :
+- S’appuie sur models.usermanager.UserManager pour accéder à SQLite.
+
+Remarques :
+- Le mot de passe est requis à la création ; sa mise à jour n’est pas gérée ici.
+- Interface basée sur PyQt5.
 """
 
 from PyQt5.QtWidgets import (

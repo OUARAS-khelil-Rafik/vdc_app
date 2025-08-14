@@ -1,9 +1,15 @@
 # gui/login.py
 
 """
-Fenêtre de connexion pour l’application VDC Engineering MVP.
-Gère l’authentification des utilisateurs et leurs rôles
-(Administrateur, Technicien, Technicien premium).
+Fenêtre de connexion de l’application VDC Engineering (MVP).
+
+Fonctions :
+- Authentification par nom d’utilisateur ou email + mot de passe.
+- Vérification de la validation du compte avant l’accès au tableau de bord.
+- Lien vers la création de compte.
+
+Rôles pris en charge :
+- Administrateur, Technicien, Technicien responsable, Superviseur.
 """
 
 import sys

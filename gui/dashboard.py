@@ -1,10 +1,16 @@
 # gui/dashboard.py
 
 """
-Tableau de bord principal de l’application VDC Engineering MVP.
-Affiche la liste des projets et propose les fonctionnalités disponibles
-selon le rôle de l’utilisateur (Administrateur, Technicien, Technicien premium).
-Intègre le widget de saisie de tests ISO (TestSessionWidget).
+Tableau de bord principal de l’application VDC Engineering (MVP).
+
+Fonctionnalités :
+- Navigation : Projets, Tests, Seuils, Utilisateurs, Déconnexion.
+- Intègre les widgets : ProjectWidget, TestSessionWidget, ThresholdsWidget, UsersWidget.
+- Règles d’accès selon le rôle :
+    * Seuils visibles pour : Administrateur, Superviseur, Technicien responsable.
+    * Utilisateurs visible uniquement pour : Administrateur.
+- Rôles supportés : Administrateur, Technicien, Technicien responsable, Superviseur.
+- Affiche un message de bienvenue et rafraîchit les vues au moment de l’affichage.
 """
 
 from PyQt5.QtWidgets import (
