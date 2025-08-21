@@ -1,5 +1,3 @@
-# models/projectmanager.py
-
 from .utils import dict_from_row
 
 class ProjectManager:
@@ -13,15 +11,15 @@ class ProjectManager:
                 p.id,
                 p.company_name,
                 p.location,
-                p.room_type,
-                p.cleanroom_area,
+                p.room_tag,
+                GROUP_CONCAT(u.full_name, ', ') AS assigned_to,
                 p.test_date,
-                p.iso_class,
-                p.validation_status,
-                p.assigned_to,
-                u.full_name AS assigned_user
+                p.contact_info,
+                p.work_type,
+                p.validation_status
             FROM projects p
-            LEFT JOIN users u ON p.assigned_to = u.id
+            LEFT JOIN project_users pu ON p.id = pu.project_id
+            LEFT JOIN users u ON pu.user_id = u.id
         """
         filters = []
         params = []
@@ -39,22 +37,23 @@ class ProjectManager:
         if filters:
             query += " WHERE " + " AND ".join(filters)
 
-        query += " ORDER BY p.test_date DESC"
+        query += " GROUP BY p.id ORDER BY p.test_date DESC"
 
         cursor.execute(query, params)
         rows = cursor.fetchall()
-        return [dict_from_row(row, [
-            "id",
-            "company_name",
-            "location",
-            "room_type",
-            "cleanroom_area",
-            "test_date",
-            "iso_class",
-            "validation_status",
-            "assigned_to",
-            "assigned_user"
-        ]) for row in rows]
+        return [
+            dict_from_row(row, [
+                "id",
+                "company_name",
+                "location",
+                "room_tag",
+                "assigned_to",
+                "test_date",
+                "contact_info",
+                "work_type",
+                "validation_status"
+            ]) for row in rows
+        ]
 
     def get_project(self, project_id):
         cursor = self.db.conn.cursor()
@@ -63,16 +62,17 @@ class ProjectManager:
                 p.id,
                 p.company_name,
                 p.location,
-                p.room_type,
-                p.cleanroom_area,
+                p.room_tag,
+                GROUP_CONCAT(u.full_name, ', ') AS assigned_to,
                 p.test_date,
-                p.iso_class,
-                p.validation_status,
-                p.assigned_to,
-                u.full_name AS assigned_user
+                p.contact_info,
+                p.work_type,
+                p.validation_status
             FROM projects p
-            LEFT JOIN users u ON p.assigned_to = u.id
+            LEFT JOIN project_users pu ON p.id = pu.project_id
+            LEFT JOIN users u ON pu.user_id = u.id
             WHERE p.id = ?
+            GROUP BY p.id
         """, (project_id,))
         row = cursor.fetchone()
         if row:
@@ -80,69 +80,82 @@ class ProjectManager:
                 "id",
                 "company_name",
                 "location",
-                "room_type",
-                "cleanroom_area",
-                "test_date",
-                "iso_class",
-                "validation_status",
+                "room_tag",
                 "assigned_to",
-                "assigned_user"
+                "test_date",
+                "contact_info",
+                "work_type"
             ])
         return None
 
-    def add_project(self, company, location, room, cleanroom_area, date, iso_class, validation_status, assigned_to):
+    def add_project(self, company_name, location, room_tag, test_date, contact_info, work_type, validation_status, responsables_ids):
         cursor = self.db.conn.cursor()
         cursor.execute("""
             INSERT INTO projects (
                 company_name,
                 location,
-                room_type,
-                cleanroom_area,
+                room_tag,
                 test_date,
-                iso_class,
-                validation_status,
-                assigned_to
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                contact_info,
+                work_type,
+                validation_status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
-            company,
+            company_name,
             location,
-            room,
-            cleanroom_area,
-            date,
-            iso_class,
-            validation_status,
-            assigned_to
+            room_tag,
+            test_date,
+            contact_info,
+            work_type,
+            "En attente"
         ))
+        project_id = cursor.lastrowid
+        if responsables_ids:
+            for user_id in responsables_ids:
+                cursor.execute(
+                    "INSERT INTO project_users (project_id, user_id) VALUES (?, ?)",
+                    (project_id, user_id)
+                )
         self.db.conn.commit()
+        return project_id
 
-    def update_project(self, project_id, company, location, room, cleanroom_area, date, iso_class, validation_status, assigned_to):
+    def update_project(self, project_id, company_name, location, room_tag, test_date, contact_info, work_type, validation_status, responsables_ids):
         cursor = self.db.conn.cursor()
         cursor.execute("""
             UPDATE projects
             SET
-                company_name     = ?,
-                location         = ?,
-                room_type        = ?,
-                cleanroom_area   = ?,
-                test_date        = ?,
-                iso_class        = ?,
-                validation_status= ?,
-                assigned_to      = ?
+                company_name      = ?,
+                location          = ?,
+                room_tag          = ?,
+                test_date         = ?,
+                contact_info      = ?,
+                work_type         = ?,
+                validation_status = ?
             WHERE id = ?
         """, (
-            company,
+            company_name,
             location,
-            room,
-            cleanroom_area,
-            date,
-            iso_class,
+            room_tag,
+            test_date,
+            contact_info,
+            work_type,
             validation_status,
-            assigned_to,
             project_id
         ))
+        # Mise à jour des responsables (relation N:N)
+        cursor.execute("DELETE FROM project_users WHERE project_id = ?", (project_id,))
+        if responsables_ids:
+            for user_id in responsables_ids:
+                cursor.execute(
+                    "INSERT INTO project_users (project_id, user_id) VALUES (?, ?)",
+                    (project_id, user_id)
+                )
         self.db.conn.commit()
 
     def delete_project(self, project_id):
         cursor = self.db.conn.cursor()
+        # Supprimer d'abord les associations dans project_users
+        cursor.execute("DELETE FROM project_users WHERE project_id = ?", (project_id,))
+        # Puis supprimer le projet
         cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
         self.db.conn.commit()

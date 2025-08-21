@@ -26,7 +26,8 @@ from PyQt5.QtGui import QColor, QIcon, QDesktopServices, QIntValidator
 from models.projectmanager import ProjectManager
 from models.utils import dict_from_row        
 from PyQt5.QtWidgets import QLabel
-
+from PyQt5.QtWidgets import QListWidget, QListWidgetItem
+from PyQt5.QtWidgets import QApplication
 class NoFocusTableWidget(QTableWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -34,27 +35,26 @@ class NoFocusTableWidget(QTableWidget):
 
 class ProjectTable(NoFocusTableWidget):
     HEADERS = [
-        "Entreprise", "Localisation", "Salle", "Surface (m²)", "Date de test",
-        "Classe ISO", "Statut", "Responsable", "Actions"
+        "ID Projet", "Nom Entreprise", "Localisation", "Tag", "Responsables",
+        "Date de Test", "Type de travail", "Statut", "Actions"
     ]
     COLUMNS = [
-        "company_name", "location", "room_type", "cleanroom_area", "test_date",
-        "iso_class", "validation_status", "assigned_user"
+        "id", "company_name", "location", "room_tag", "responsables",
+        "test_date", "work_type", "validation_status"
     ]
 
     def __init__(self, parent=None, user=None):
         super().__init__(parent)
         self.user = user
-        # Détermine si la colonne Actions doit être affichée
         self.show_actions = True
-        if self.user and self.user.get("role") in ("Technicien", "Technicien premium"):
+        if self.user and self.user.get("role") in ("Technicien", "Technicien responsable"):
             self.show_actions = False
 
-        headers = self.HEADERS[:-1] if not self.show_actions else self.HEADERS
+        headers = self.HEADERS if self.show_actions else self.HEADERS[:-1]
         self.setColumnCount(len(headers))
         self.setHorizontalHeaderLabels(headers)
         self.setSelectionBehavior(self.SelectRows)
-        self.setSelectionMode(self.ExtendedSelection)
+        self.setSelectionMode(self.SingleSelection)
         self.setEditTriggers(self.NoEditTriggers)
         self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
@@ -86,39 +86,55 @@ class ProjectTable(NoFocusTableWidget):
         """)
 
     def populate(self, rows):
-        # Filtrage selon le rôle utilisateur
         filtered_rows = []
         if self.user:
             role = self.user.get("role")
             user_id = self.user.get("id")
-            if role in ("Admin", "Administrateur"):
-                # Affiche tous les projets pour Admin ou Administrateur
+            # Superviseur = Admin
+            if role in ("Administrateur", "Admin", "Superviseur"):
                 filtered_rows = rows
             else:
-                # Affiche seulement les projets assignés à l'utilisateur
                 for row in rows:
-                    assigned_to = row["assigned_to"] if "assigned_to" in row else row.get("assigned_to")
-                    if assigned_to == user_id:
+                    responsables_ids = []
+                    if "responsables_ids" in row:
+                        responsables_ids = row["responsables_ids"]
+                    else:
+                        cursor = self.parent().db.conn.cursor()
+                        cursor.execute("SELECT user_id FROM project_users WHERE project_id=?", (row["id"],))
+                        responsables_ids = [r["user_id"] for r in cursor.fetchall()]
+                    if user_id in responsables_ids:
                         filtered_rows.append(row)
         else:
             filtered_rows = rows
 
         self.setRowCount(len(filtered_rows))
+        icon_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "icons"))
         for i, row in enumerate(filtered_rows):
-            row = dict_from_row(row, self.COLUMNS + ['id', 'validation_status', 'assigned_to'])
+            row = dict(row)
+            value_responsables = row.get("responsables", "")
+            contact_info = row.get("contact_info", "")
+            contact_email, contact_phone = "", ""
+            if contact_info:
+                parts = contact_info.split("/")
+                contact_email = parts[0].strip() if len(parts) > 0 else ""
+                contact_phone = parts[1].strip() if len(parts) > 1 else ""
             for col, key in enumerate(self.COLUMNS):
-                value = row.get(key, "")
-                if key == "cleanroom_area":
-                    try:
-                        value = str(int(float(value)))
-                    except Exception:
-                        value = ""
-                item = QTableWidgetItem(str(value))
-                item.setTextAlignment(Qt.AlignCenter)
-                item.setBackground(QColor(Qt.white))
-                if col == 0:
-                    item.setData(Qt.UserRole, row.get('id'))
-                self.setItem(i, col, item)
+                if key == "responsables":
+                    value = value_responsables
+                    item = QTableWidgetItem(str(value))
+                    item.setTextAlignment(Qt.AlignCenter)
+                    item.setBackground(QColor(Qt.white))
+                    if col == 0:
+                        item.setData(Qt.UserRole, row.get('id'))
+                    self.setItem(i, col, item)
+                else:
+                    value = row.get(key, "")
+                    item = QTableWidgetItem(str(value))
+                    item.setTextAlignment(Qt.AlignCenter)
+                    item.setBackground(QColor(Qt.white))
+                    if col == 0:
+                        item.setData(Qt.UserRole, row.get('id'))
+                    self.setItem(i, col, item)
             # Actions column (last column)
             if self.show_actions:
                 action_widget = QWidget()
@@ -127,7 +143,40 @@ class ProjectTable(NoFocusTableWidget):
                 h_layout.setSpacing(5)
                 h_layout.addStretch()
 
-                icon_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "icons"))
+                # Contact buttons
+                btn_email = QPushButton()
+                btn_email.setIcon(QIcon(os.path.join(icon_dir, "email.png")))
+                btn_email.setToolTip("Envoyer Email")
+                btn_email.setFixedSize(28, 28)
+                btn_email.setStyleSheet("""
+                    QPushButton {
+                        border: none;
+                        background: transparent;
+                    }
+                    QPushButton:focus, QPushButton:hover {
+                        background: #e6f0fa;
+                    }
+                """)
+                btn_email.clicked.connect(lambda _, email=contact_email: self.show_email_dialog(email))
+
+                btn_phone = QPushButton()
+                btn_phone.setIcon(QIcon(os.path.join(icon_dir, "appel.png")))
+                btn_phone.setToolTip("Afficher Numéro Téléphone")
+                btn_phone.setFixedSize(28, 28)
+                btn_phone.setStyleSheet("""
+                    QPushButton {
+                        border: none;
+                        background: transparent;
+                    }
+                    QPushButton:focus, QPushButton:hover {
+                        background: #e6f0fa;
+                    }
+                """)
+                btn_phone.clicked.connect(lambda _, phone=contact_phone: self.show_phone_dialog(phone))
+
+                h_layout.addWidget(btn_email)
+                h_layout.addWidget(btn_phone)
+
                 is_valid = row.get("validation_status", "").lower() == "validé"
 
                 btn_generate_pdf = QPushButton()
@@ -175,6 +224,47 @@ class ProjectTable(NoFocusTableWidget):
         self.resizeColumnsToContents()
         self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
+    def show_phone_dialog(self, phone):
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QApplication
+        from PyQt5.QtGui import QClipboard
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Téléphone")
+        layout = QVBoxLayout(dialog)
+        label = QLabel(f"Numéro : {phone if phone else 'Aucun numéro disponible.'}")
+        layout.addWidget(label)
+        if phone:
+            btn_copy = QPushButton("Copier le numéro")
+            btn_copy.clicked.connect(lambda: self.copy_to_clipboard(phone))
+            layout.addWidget(btn_copy)
+        btn_close = QPushButton("Fermer")
+        btn_close.clicked.connect(dialog.accept)
+        layout.addWidget(btn_close)
+        dialog.setLayout(layout)
+        dialog.exec_()
+
+    def show_email_dialog(self, email):
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QApplication
+        from PyQt5.QtGui import QClipboard
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Email")
+        layout = QVBoxLayout(dialog)
+        label = QLabel(f"Adresse email : {email if email else 'Aucune adresse email disponible.'}")
+        layout.addWidget(label)
+        if email:
+            btn_copy = QPushButton("Copier l'email")
+            btn_copy.clicked.connect(lambda: self.copy_to_clipboard(email))
+            layout.addWidget(btn_copy)
+        btn_close = QPushButton("Fermer")
+        btn_close.clicked.connect(dialog.accept)
+        layout.addWidget(btn_close)
+        dialog.setLayout(layout)
+        dialog.exec_()
+
+    def copy_to_clipboard(self, text):
+        clipboard = QApplication.clipboard()
+        clipboard.setText(text)
+        QMessageBox.information(self, "Copié", f"Copié dans le presse-papier : {text}", QMessageBox.Ok)
+
     def generate_pdf(self, project_id):
         try:
             from pdf.generator import PDFGenerator
@@ -202,20 +292,8 @@ class ProjectTable(NoFocusTableWidget):
         item = self.item(sel, 0)
         return item.data(Qt.UserRole) if item else None
 
-# --- Ajout d'une méthode utilitaire pour récupérer les seuils ISO ---
-def get_iso_thresholds(iso_class):
-    """
-    Récupère les seuils pour une classe ISO donnée.
-    Importé dynamiquement depuis gui/thresholds.py pour éviter les imports circulaires.
-    """
-    try:
-        from gui.thresholds import ISO_THRESHOLDS
-        return ISO_THRESHOLDS.get(iso_class, {})
-    except ImportError:
-        return {}
-
 class ProjectForm(QDialog):
-    ISO_CLASSES = [f"ISO {i}" for i in range(1, 10)]
+    WORK_TYPES = ["HVAC", "Thermal Mapping", "Instrumentation"]
     VALIDATION_STATUSES = ["En attente", "Validé"]
 
     def __init__(self, db, user, project=None):
@@ -233,7 +311,7 @@ class ProjectForm(QDialog):
     def _init_ui(self):
         self.setWindowTitle("Modifier projet" if self.project else "Nouveau projet")
         self.setModal(True)
-        self.resize(400, 300)
+        self.resize(500, 400)
         self.setStyleSheet("""
             QDialog { background-color: #f0f0f0; }
             QLineEdit, QDateEdit, QComboBox {
@@ -250,77 +328,87 @@ class ProjectForm(QDialog):
             QPushButton:pressed { background-color: #14406e; }
         """)
 
-        self.input_company  = QLineEdit()
+        self.input_company = QLineEdit()
         self.input_location = QLineEdit()
-        self.input_room     = QLineEdit()
-        self.input_surface  = QLineEdit()
-        self.input_surface.setValidator(QIntValidator(0, 1000000))
-        self.input_date     = QDateEdit(calendarPopup=True)
-        self.input_date.setDate(QDate.currentDate())
-        self.input_iso      = QComboBox()
-        self.input_iso.addItems(self.ISO_CLASSES)
-        self.input_status   = QComboBox()
+        self.input_room_tag = QLineEdit()
+        self.input_test_date = QDateEdit(calendarPopup=True)
+        self.input_test_date.setDate(QDate.currentDate())
+        self.input_contact_email = QLineEdit()
+        self.input_contact_email.setPlaceholderText("Email")
+        self.input_contact_phone = QLineEdit()
+        self.input_contact_phone.setPlaceholderText("Numéro de téléphone")
+        self.input_work_type = QComboBox()
+        self.input_work_type.addItems(self.WORK_TYPES)
+        self.input_status = QComboBox()
         self.input_status.addItems(self.VALIDATION_STATUSES)
-        
-        # Récupère tous les utilisateurs disponibles
+
+        # Récupère tous les utilisateurs validés
         cursor = self.db.conn.cursor()
-        cursor.execute("SELECT id, full_name FROM users WHERE validate_user='Validé'")
+        cursor.execute("SELECT id, full_name, role FROM users WHERE validate_user='Validé'")
         self.user_list = cursor.fetchall()
 
-        self.input_assigned_to = QComboBox()
+        # Ajout d'une QListWidget pour multi-sélection des responsables
+        self.input_responsables = QListWidget()
+        self.input_responsables.setSelectionMode(QListWidget.MultiSelection)
         for user in self.user_list:
-            self.input_assigned_to.addItem(user["full_name"], user["id"])
-        
-        if self.project and self.project.get("assigned_to"):
-            for idx in range(self.input_assigned_to.count()):
-                if self.input_assigned_to.itemData(idx) == self.project["assigned_to"]:
-                    self.input_assigned_to.setCurrentIndex(idx)
-                    break
+            item = QListWidgetItem(f"{user['full_name']} ({user['role']})")
+            item.setData(Qt.UserRole, user["id"])
+            self.input_responsables.addItem(item)
+        self.input_responsables.setToolTip("Sélectionnez un ou plusieurs responsables")
 
-        # Ajout d'un bouton pour afficher les seuils ISO sélectionnés
-        self.btn_show_thresholds = QPushButton("Voir seuils ISO")
-        self.btn_show_thresholds.clicked.connect(self.show_iso_thresholds_dialog)
-
+        # Pré-remplissage si modification
         if self.project:
             self.input_company.setText(self.project.get("company_name", ""))
             self.input_location.setText(self.project.get("location", ""))
-            self.input_room.setText(self.project.get("room_type", ""))
-            self.input_surface.setText(str(self.project.get("cleanroom_area", "")))
+            self.input_room_tag.setText(self.project.get("room_tag", ""))
             date = QDate.fromString(self.project.get("test_date", ""), "yyyy-MM-dd")
             if date.isValid():
-                self.input_date.setDate(date)
-            iso_class = self.project.get("iso_class", "ISO 5")
-            idx_iso = self.input_iso.findText(iso_class)
-            if idx_iso >= 0:
-                self.input_iso.setCurrentIndex(idx_iso)
-            status = self.project.get("validation_status", "En attente")
+                self.input_test_date.setDate(date)
+            contact_info = self.project.get("contact_info", "")
+            if contact_info:
+                parts = contact_info.split("/")
+                self.input_contact_email.setText(parts[0].strip() if len(parts) > 0 else "")
+                self.input_contact_phone.setText(parts[1].strip() if len(parts) > 1 else "")
+            work_type = self.project.get("work_type", self.WORK_TYPES[0])
+            idx_work = self.input_work_type.findText(work_type)
+            if idx_work >= 0:
+                self.input_work_type.setCurrentIndex(idx_work)
+            status = self.project.get("validation_status", self.VALIDATION_STATUSES[0])
             idx_status = self.input_status.findText(status)
             if idx_status >= 0:
                 self.input_status.setCurrentIndex(idx_status)
-        for widget in [
-            self.input_company, self.input_location, self.input_room, self.input_surface,
-            self.input_date, self.input_iso, self.input_status
-        ]:
-            widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.btn_save   = QPushButton("Modifier" if self.project else "Enregistrer")
+            # Sélection des responsables
+            cursor.execute("SELECT user_id FROM project_users WHERE project_id=?", (self.project["id"],))
+            responsables_ids = set(row["user_id"] for row in cursor.fetchall())
+            for i in range(self.input_responsables.count()):
+                item = self.input_responsables.item(i)
+                if item.data(Qt.UserRole) in responsables_ids:
+                    item.setSelected(True)
+
+        self.btn_save = QPushButton("Modifier" if self.project else "Enregistrer")
         self.btn_cancel = QPushButton("Annuler")
         self.btn_save.clicked.connect(self.save_project)
         self.btn_cancel.clicked.connect(self.reject)
+
         form_layout = QFormLayout()
         form_layout.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        form_layout.addRow("Entreprise :",    self.input_company)
-        form_layout.addRow("Localisation :",  self.input_location)
-        form_layout.addRow("Salle :", self.input_room)
-        form_layout.addRow("Surface (m²) :", self.input_surface)
-        form_layout.addRow("Date du test :",  self.input_date)
-        form_layout.addRow("Classe ISO :",    self.input_iso)
-        form_layout.addRow("Statut :", self.input_status)
-        form_layout.addRow("Responsable du projet :", self.input_assigned_to)
-        form_layout.addRow("", self.btn_show_thresholds)
+        form_layout.addRow("Entreprise :", self.input_company)
+        form_layout.addRow("Localisation :", self.input_location)
+        form_layout.addRow("Tag :", self.input_room_tag)
+        form_layout.addRow("Responsables :", self.input_responsables)
+        form_layout.addRow("Date de Test :", self.input_test_date)
+        form_layout.addRow("Contact Email :", self.input_contact_email)
+        form_layout.addRow("Contact Téléphone :", self.input_contact_phone)
+        form_layout.addRow("Type de travail :", self.input_work_type)
+        # Affiche le champ statut seulement en modification
+        if self.project:
+            form_layout.addRow("Statut :", self.input_status)
+
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
         btn_layout.addWidget(self.btn_save)
         btn_layout.addWidget(self.btn_cancel)
+
         main_layout = QVBoxLayout()
         main_layout.addLayout(form_layout)
         main_layout.addLayout(btn_layout)
@@ -328,38 +416,40 @@ class ProjectForm(QDialog):
         main_layout.setStretch(1, 0)
         self.setLayout(main_layout)
 
-    def show_iso_thresholds_dialog(self):
-        iso_class = self.input_iso.currentText()
-        thresholds = get_iso_thresholds(iso_class)
-        if not thresholds:
-            QMessageBox.information(self, "Seuils ISO", f"Aucun seuil trouvé pour {iso_class}.", QMessageBox.Ok)
-            return
-        msg = f"Seuils pour {iso_class} :\n\n"
-        for test, value in thresholds.items():
-            msg += f"- {test} : {value}\n"
-        QMessageBox.information(self, f"Seuils {iso_class}", msg, QMessageBox.Ok)
-
     def save_project(self):
-        company  = self.input_company.text().strip()
+        company = self.input_company.text().strip()
         location = self.input_location.text().strip()
-        room     = self.input_room.text().strip()
-        surface  = self.input_surface.text().strip()
-        date     = self.input_date.date().toString("yyyy-MM-dd")
-        iso_class = self.input_iso.currentText()
-        validation_status = self.input_status.currentText()
-        assigned_to = self.input_assigned_to.currentData()
+        room_tag = self.input_room_tag.text().strip()
+        test_date = self.input_test_date.date().toString("yyyy-MM-dd")
+        contact_email = self.input_contact_email.text().strip()
+        contact_phone = self.input_contact_phone.text().strip()
+        contact_info = f"{contact_email} / {contact_phone}"
+        work_type = self.input_work_type.currentText()
+        # Pour l'ajout, le statut est toujours "En attente"
+        if self.project:
+            validation_status = self.input_status.currentText()
+        else:
+            validation_status = "En attente"
 
-        if not company or not date or not iso_class or not validation_status or not surface:
-            QMessageBox.warning(self, "Champs manquants", "Le nom de l'entreprise, la date, la classe ISO, la surface et le statut sont obligatoires.", QMessageBox.Ok)
+        # Récupérer les IDs des responsables sélectionnés
+        responsables_ids = []
+        for item in self.input_responsables.selectedItems():
+            responsables_ids.append(item.data(Qt.UserRole))
+
+        if not company or not test_date or not contact_email or not contact_phone or not work_type or not validation_status or not responsables_ids:
+            QMessageBox.warning(self, "Champs manquants", "Tous les champs sont obligatoires, y compris au moins un responsable.", QMessageBox.Ok)
             return
         try:
-            surface_int = int(surface)
             if self.project:
                 self.manager.update_project(
-                    self.project["id"], company, location, room, surface_int, date, iso_class, validation_status, assigned_to
+                    self.project["id"], company, location, room_tag, test_date,
+                    contact_info, work_type, validation_status, responsables_ids
                 )
             else:
-                self.manager.add_project(company, location, room, surface_int, date, iso_class, validation_status, assigned_to)
+                self.manager.add_project(
+                    company, location, room_tag, test_date,
+                    contact_info, work_type, validation_status, responsables_ids
+                )
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "Erreur", f"Impossible de {'modifier' if self.project else 'créer'} le projet : {e}", QMessageBox.Ok)
@@ -403,8 +493,7 @@ class ProjectWidget(QWidget):
             QLabel { color: #1c5ea3; font-weight: bold; font-size: 13px; }
         """)
 
-        # --- Filtres ---
-
+        # Filtres
         self.filter_company_label = QLabel("Filtrer par entreprise :")
         self.filter_company_label.setStyleSheet("font-weight: bold; font-size: 15px; color: #1c5ea3; background: transparent;")
         self.filter_company_text = QLineEdit()
@@ -431,7 +520,6 @@ class ProjectWidget(QWidget):
         self.filter_end_date.setFixedHeight(28)
         self.filter_end_date.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-        # Connect filter widgets to refresh_projects for auto-filtering
         self.filter_company_text.textChanged.connect(self.refresh_projects)
         self.filter_start_date.dateChanged.connect(self.refresh_projects)
         self.filter_end_date.dateChanged.connect(self.refresh_projects)
@@ -446,7 +534,7 @@ class ProjectWidget(QWidget):
         filter_layout.addWidget(self.filter_end_date)
         filter_layout.addStretch()
 
-        # Pass user to ProjectTable to control "Actions" column visibility
+        # Table setup
         self.table = ProjectTable(user=self.user)
         self.table.setFocusPolicy(Qt.NoFocus)
 
@@ -468,8 +556,8 @@ class ProjectWidget(QWidget):
 
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
-        # Hide buttons for Technicien and Technicien premium
-        if self.user.get("role") not in ("Technicien", "Technicien premium"):
+        # Hide buttons for Technicien and Technicien responsable
+        if self.user.get("role") not in ("Technicien", "Technicien responsable"):
             btn_layout.addWidget(self.btn_add)
             btn_layout.addWidget(self.btn_edit)
             btn_layout.addWidget(self.btn_delete)
@@ -483,39 +571,55 @@ class ProjectWidget(QWidget):
         self.refresh_projects()
 
     def refresh_projects(self):
-        # Récupérer les valeurs des filtres
         start_date = self.filter_start_date.date().toString("yyyy-MM-dd")
         end_date = self.filter_end_date.date().toString("yyyy-MM-dd")
-        company_name = self.filter_company_text.text().strip()
-        if not company_name:
-            company_name = None
+        company_name_filter = self.filter_company_text.text().strip().lower()
 
         all_projects = self.manager.get_projects(
             start_date=start_date,
-            end_date=end_date,
-            company_name=None  # On filtre manuellement ci-dessous
+            end_date=end_date
         )
-        # Filtrer selon le rôle utilisateur
+
+        if company_name_filter:
+            all_projects = [
+                p for p in all_projects
+                if p.get("company_name", "").lower().startswith(company_name_filter)
+            ]
+
+        filtered_projects = []
         if self.user:
             role = self.user.get("role")
             user_id = self.user.get("id")
-            if role in ("Admin", "Administrateur"):
+            if role in ("Administrateur", "Admin", "Superviseur"):
                 filtered_projects = all_projects
             else:
-                filtered_projects = [
-                    row for row in all_projects
-                    if (row["assigned_to"] if "assigned_to" in row else row.get("assigned_to")) == user_id
-                ]
+                for row in all_projects:
+                    cursor = self.db.conn.cursor()
+                    cursor.execute("SELECT 1 FROM project_users WHERE project_id=? AND user_id=?", (row["id"], user_id))
+                    if cursor.fetchone():
+                        filtered_projects.append(row)
         else:
             filtered_projects = all_projects
 
-        # Filtre entreprise : insensible à la casse, mot par mot, commence par
-        if company_name:
-            words = company_name.lower().split()
-            def match_company(row):
-                company = row.get("company_name", "").lower()
-                return all(company.startswith(word) or company.find(f" {word}") != -1 for word in words)
-            filtered_projects = [row for row in filtered_projects if match_company(row)]
+        # Add responsables and contact info for actions
+        for project in filtered_projects:
+            cursor = self.db.conn.cursor()
+            cursor.execute("""
+                SELECT u.full_name FROM users u
+                JOIN project_users pu ON pu.user_id = u.id
+                WHERE pu.project_id=?
+            """, (project["id"],))
+            responsables = [row["full_name"] for row in cursor.fetchall()]
+            project["responsables"] = ", ".join(responsables)
+            # Contact info for actions
+            contact_info = project.get("contact_info", "")
+            contact_email, contact_phone = "", ""
+            if contact_info:
+                parts = contact_info.split("/")
+                contact_email = parts[0].strip() if len(parts) > 0 else ""
+                contact_phone = parts[1].strip() if len(parts) > 1 else ""
+            project["contact_email"] = contact_email
+            project["contact_phone"] = contact_phone
 
         self.table.populate(filtered_projects)
         for i in range(self.table.rowCount()):

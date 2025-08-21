@@ -74,7 +74,7 @@ class DashboardWindow(QMainWindow):
 
     def _init_ui(self):
         self.setWindowTitle("VDC Engineering – Tableau de bord")
-        self.setMinimumSize(1000, 600)
+        self.setMinimumSize(1200, 600)
         self.setStyleSheet("""
             QMainWindow, QWidget { background-color: #e0e0e0; }
             QLabel#welcomeLabel {
@@ -129,14 +129,14 @@ class DashboardWindow(QMainWindow):
 
         # Instanciation des widgets
         self.project_widget    = ProjectWidget(self.db, self.user)
-        self.tests_widget      = TestSessionWidget(self.db, self.user)
-        self.thresholds_widget = ThresholdsWidget(self.db, self.user)
+        #self.tests_widget      = TestSessionWidget(self.db, self.user)
+        #self.thresholds_widget = ThresholdsWidget(self.db, self.user)
         self.users_widget      = UsersWidget(self.db)
 
         # Ajout au layout
         for w in (self.project_widget,
-                  self.tests_widget,
-                  self.thresholds_widget,
+                  # self.tests_widget,
+                  #self.thresholds_widget,
                   self.users_widget):
             self.content_layout.addWidget(w)
 
@@ -146,29 +146,29 @@ class DashboardWindow(QMainWindow):
     def show_projects(self):
         self.project_widget.refresh_projects()
         self.project_widget.show()
-        self.tests_widget.hide()
-        self.thresholds_widget.hide()
+        #self.tests_widget.hide()
+        #self.thresholds_widget.hide()
         self.users_widget.hide()
 
     def show_tests(self):
         self.project_widget.hide()
-        self.thresholds_widget.hide()
+        #self.thresholds_widget.hide()
         self.users_widget.hide()
-        self.tests_widget.refresh()
-        self.tests_widget.show()
+        #self.tests_widget.refresh()
+        #self.tests_widget.show()
 
     def show_thresholds(self):
-        self.thresholds_widget.refresh_thresholds()
+        #self.thresholds_widget.refresh_thresholds()
         self.project_widget.hide()
-        self.tests_widget.hide()
-        self.thresholds_widget.show()
+        #self.tests_widget.hide()
+        #self.thresholds_widget.show()
         self.users_widget.hide()
 
     def show_users(self):
         self.users_widget.refresh_users()
         self.project_widget.hide()
-        self.tests_widget.hide()
-        self.thresholds_widget.hide()
+        #self.tests_widget.hide()
+        #self.thresholds_widget.hide()
         self.users_widget.show()
 
     def logout(self):

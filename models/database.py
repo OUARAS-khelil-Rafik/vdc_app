@@ -50,13 +50,25 @@ class Database:
                 id                INTEGER PRIMARY KEY AUTOINCREMENT,
                 company_name      TEXT NOT NULL,
                 location          TEXT,
-                room_type         TEXT,
-                cleanroom_area    INTEGER CHECK(cleanroom_area >= 0),
+                room_tag          TEXT,
                 test_date         TEXT NOT NULL,
-                iso_class         TEXT NOT NULL CHECK(iso_class IN ('ISO 1','ISO 2','ISO 3','ISO 4','ISO 5','ISO 6','ISO 7','ISO 8','ISO 9')),
+                contact_info      TEXT, -- Email + Numéro de téléphone (format libre, à parser côté app)
+                work_type         TEXT NOT NULL CHECK(work_type IN ('HVAC','Thermal Mapping','Instrumentation')),
                 validation_status TEXT NOT NULL DEFAULT 'En attente' CHECK(validation_status IN ('En attente','Validé')),
+                -- Responsables: relation N:N via table d'association project_users
+                -- Les colonnes ci-dessous sont conservées pour compatibilité, mais non utilisées pour multi-users
                 assigned_to       INTEGER,
                 FOREIGN KEY (assigned_to) REFERENCES users(id)
+            );
+            """)
+            # Table d'association projets <-> utilisateurs (responsables multiples)
+            self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS project_users (
+                project_id INTEGER NOT NULL,
+                user_id    INTEGER NOT NULL,
+                PRIMARY KEY (project_id, user_id),
+                FOREIGN KEY (project_id) REFERENCES projects(id),
+                FOREIGN KEY (user_id) REFERENCES users(id)
             );
             """)
 
