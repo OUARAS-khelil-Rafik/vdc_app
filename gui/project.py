@@ -485,11 +485,11 @@ class ProjectWidget(QWidget):
                 border-bottom: 1px solid #b8d5ed;
                 border-right: 1px solid #b8d5ed;
             }
-            QLineEdit, QDateEdit {
+            QLineEdit, QDateEdit, QComboBox {
                 background: #fff; border: 1px solid #b8d5ed; border-radius: 4px;
                 padding: 4px 8px; font-size: 14px;
             }
-            QLineEdit:focus, QDateEdit:focus { border: 2px solid #1c5ea3; }
+            QLineEdit:focus, QDateEdit:focus, QComboBox:focus { border: 2px solid #1c5ea3; }
             QLabel { color: #1c5ea3; font-weight: bold; font-size: 13px; }
         """)
 
@@ -520,9 +520,28 @@ class ProjectWidget(QWidget):
         self.filter_end_date.setFixedHeight(28)
         self.filter_end_date.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
+        # Ajout du filtre par Statut
+        self.filter_status_label = QLabel("Filtrer par statut :")
+        self.filter_status_label.setStyleSheet("font-weight: bold; font-size: 15px; color: #1c5ea3; background: transparent;")
+        self.filter_status_combo = QComboBox()
+        self.filter_status_combo.addItem("Tous")
+        self.filter_status_combo.addItem("En attente")
+        self.filter_status_combo.addItem("Validé")
+        self.filter_status_combo.setToolTip("Filtrer par statut")
+        self.filter_status_combo.setFixedHeight(28)
+        self.filter_status_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.filter_status_combo.setStyleSheet("""
+            QComboBox {
+                background: #fff; border: 1px solid #b8d5ed; border-radius: 4px;
+                padding: 4px 8px; font-size: 14px;
+            }
+            QComboBox:focus { border: 2px solid #1c5ea3; }
+        """)
+
         self.filter_company_text.textChanged.connect(self.refresh_projects)
         self.filter_start_date.dateChanged.connect(self.refresh_projects)
         self.filter_end_date.dateChanged.connect(self.refresh_projects)
+        self.filter_status_combo.currentIndexChanged.connect(self.refresh_projects)
 
         filter_layout = QHBoxLayout()
         filter_layout.setSpacing(12)
@@ -532,6 +551,8 @@ class ProjectWidget(QWidget):
         filter_layout.addWidget(self.filter_start_date)
         filter_layout.addWidget(self.filter_end_date_label)
         filter_layout.addWidget(self.filter_end_date)
+        filter_layout.addWidget(self.filter_status_label)
+        filter_layout.addWidget(self.filter_status_combo)
         filter_layout.addStretch()
 
         # Table setup
@@ -574,6 +595,7 @@ class ProjectWidget(QWidget):
         start_date = self.filter_start_date.date().toString("yyyy-MM-dd")
         end_date = self.filter_end_date.date().toString("yyyy-MM-dd")
         company_name_filter = self.filter_company_text.text().strip().lower()
+        status_filter = self.filter_status_combo.currentText()
 
         all_projects = self.manager.get_projects(
             start_date=start_date,
@@ -584,6 +606,12 @@ class ProjectWidget(QWidget):
             all_projects = [
                 p for p in all_projects
                 if p.get("company_name", "").lower().startswith(company_name_filter)
+            ]
+
+        if status_filter != "Tous":
+            all_projects = [
+                p for p in all_projects
+                if p.get("validation_status", "") == status_filter
             ]
 
         filtered_projects = []
