@@ -112,6 +112,52 @@ class Database:
             );
             """)
 
+            # models/database.py -> dans Database.initialize(self), à la fin (avant la fin du with self.conn:)
+            # ---------------------------
+            # Étalons & étalonnages
+            # ---------------------------
+            self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS standards (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                serial TEXT,
+                name TEXT,
+                category TEXT,
+                manufacturer TEXT,
+                model TEXT,
+                location TEXT,
+                owner TEXT,
+                tags TEXT,
+                interval_months INTEGER,
+                last_cal_date TEXT,
+                next_cal_date TEXT,
+                status TEXT,          -- OK / Bientôt dû / Bloqué
+                blocked INTEGER,      -- 0/1 blocage manuel
+                block_reason TEXT,
+                certificate_path TEXT,
+                certificate_id TEXT,
+                notes TEXT,
+                created_at TEXT,
+                updated_at TEXT
+            );
+            """)
+            self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS calibrations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                standard_id INTEGER NOT NULL REFERENCES standards(id) ON DELETE CASCADE,
+                cal_date TEXT,
+                due_date TEXT,
+                on_site INTEGER,
+                method TEXT,
+                certificate_id TEXT,
+                certificate_path TEXT,
+                pass_fail INTEGER,
+                results_json TEXT,
+                notes TEXT,
+                created_at TEXT
+            );
+            """)
+
+
             # Equipements des tests
             self.conn.execute("""
             CREATE TABLE IF NOT EXISTS equipment (
