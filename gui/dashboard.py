@@ -52,7 +52,7 @@ class DashboardToolbar(QToolBar):
         self.actions_dict = {
             'projects': QAction(QIcon("icons/projects.png"),   "Projets",      self),
             'tests':    QAction(QIcon("icons/tests.png"),      "Tests",        self),
-            'etalons':  QAction(QIcon("icons/standards.png"),  "Étalons",      self),  # remplace "Seuils"
+            'etalons':  QAction(QIcon("icons/etalons.png"),  "Étalons",      self),
             'users':    QAction(QIcon("icons/users.png"),      "Utilisateurs", self),
             'logout':   QAction(QIcon("icons/logout.png"),     "Déconnexion",  self)
         }
@@ -140,7 +140,7 @@ class DashboardWindow(QMainWindow):
         # Instanciation des widgets principaux
         self.project_widget  = ProjectWidget(self.db, self.user)
         # self.tests_widget    = TestSessionWidget(self.db, self.user)  # Dé-commente si nécessaire
-        self.etalons_widget  = EtalonsWidget(self.db, self.user)       # <<< Nouveau
+        self.etalons_widget  = EtalonsWidget(self.db, self.user)
         self.users_widget    = UsersWidget(self.db)
 
         # Ajout au layout (tous cachés sauf celui affiché)

@@ -34,6 +34,10 @@ from PyQt5.QtGui import QColor
 from models.usermanager import UserManager
 import sqlite3
 
+# Define theme colors
+THEME_PRIMARY = "#1c5ea3"
+THEME_ACCENT = "#b8d5ed"
+
 class NoFocusTableWidget(QTableWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -178,21 +182,16 @@ class UsersTable(NoFocusTableWidget):
         self.setStyleSheet("""
             QTableWidget {
                 background-color: #fff; 
-                alternate-background-color: #b8d5ed;
                 gridline-color: #1c5ea3; 
-                selection-background-color: #b8d5ed;
                 selection-color: #1c5ea3; 
                 border: 2px solid #1c5ea3; 
-                font-size: 15px;
+                font-size: 13px;
+                font-weight: bold;
                 border-radius: 8px;
             }
             QHeaderView::section {
                 background-color: #1c5ea3; color: #fff; font-weight: bold;
                 border: none; padding: 6px; qproperty-alignment: 'AlignCenter | AlignVCenter';
-            }
-            QTableWidget::item {
-                border-bottom: 1px solid #b8d5ed;
-                border-right: 1px solid #b8d5ed;
             }
         """)
 

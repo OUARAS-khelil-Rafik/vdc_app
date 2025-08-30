@@ -28,6 +28,11 @@ from models.utils import dict_from_row
 from PyQt5.QtWidgets import QLabel
 from PyQt5.QtWidgets import QListWidget, QListWidgetItem
 from PyQt5.QtWidgets import QApplication
+
+# Define theme colors
+THEME_PRIMARY = "#1c5ea3"
+THEME_ACCENT = "#b8d5ed"
+
 class NoFocusTableWidget(QTableWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -62,27 +67,31 @@ class ProjectTable(NoFocusTableWidget):
         self.setMinimumHeight(200)
         self.verticalHeader().setVisible(False)
         self.horizontalHeader().setDefaultAlignment(Qt.AlignCenter | Qt.AlignVCenter)
-        self.setStyleSheet("""
-            QTableWidget {
+        # Use THEME_PRIMARY and THEME_ACCENT for consistent styling
+        self.setStyleSheet(f"""
+            QPushButton {{
+            background-color: {THEME_PRIMARY}; color: #fff; border-radius: 8px;
+            padding: 8px 24px; font-weight: bold; font-size: 14px; border: none;
+            }}
+            QPushButton:hover {{ background-color: {THEME_ACCENT}; color: {THEME_PRIMARY}; }}
+            QTableWidget {{
                 background-color: #fff; 
-                alternate-background-color: #b8d5ed;
-                gridline-color: #1c5ea3; 
-                selection-background-color: #b8d5ed;
-                selection-color: #1c5ea3; 
-                border: 2px solid #1c5ea3; 
+                gridline-color: {THEME_PRIMARY};
+                selection-color: {THEME_PRIMARY}; 
+                border: 2px solid {THEME_PRIMARY};
                 font-size: 13px;
-                border-radius: 8px;
-                color: #000;
                 font-weight: bold;
-            }
-            QHeaderView::section {
-                background-color: #1c5ea3; color: #fff; font-weight: bold;
-                border: none; padding: 6px; qproperty-alignment: 'AlignCenter | AlignVCenter';
-            }
-            QTableWidget::item {
-                border-bottom: 1px solid #b8d5ed;
-                border-right: 1px solid #b8d5ed;
-            }
+                border-radius: 8px;
+            }}
+            QHeaderView::section {{
+            background-color: {THEME_PRIMARY}; color: #fff; font-weight: bold;
+            border: none; padding: 6px; qproperty-alignment: 'AlignCenter | AlignVCenter';
+            }}
+            QLineEdit, QComboBox {{
+            background: #fff; border: 1px solid {THEME_ACCENT}; border-radius: 4px; padding: 4px 8px; font-size: 14px;
+            }}
+            QLineEdit:focus, QComboBox:focus {{ border: 2px solid {THEME_PRIMARY}; }}
+            QLabel {{ color: {THEME_PRIMARY}; font-weight: bold; font-size: 13px; }}
         """)
 
     def populate(self, rows):

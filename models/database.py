@@ -118,27 +118,29 @@ class Database:
             # ---------------------------
             self.conn.execute("""
             CREATE TABLE IF NOT EXISTS standards (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                serial TEXT,
+                id INTEGER PRIMARY KEY,
+                serial TEXT UNIQUE,                -- Unique serial number
                 name TEXT,
                 category TEXT,
                 manufacturer TEXT,
                 model TEXT,
                 location TEXT,
-                owner TEXT,
+                owner_id INTEGER,                  -- user ID of owner
                 tags TEXT,
                 interval_months INTEGER,
                 last_cal_date TEXT,
                 next_cal_date TEXT,
-                status TEXT,          -- OK / Bientôt dû / Bloqué
-                blocked INTEGER,      -- 0/1 blocage manuel
+                status TEXT,                       -- OK / Soon due / Blocked
+                blocked INTEGER,                   -- 0/1 manual block
                 block_reason TEXT,
                 certificate_path TEXT,
                 certificate_id TEXT,
                 notes TEXT,
                 created_at TEXT,
-                updated_at TEXT
+                updated_at TEXT,
+                FOREIGN KEY (owner_id) REFERENCES users(id)
             );
+
             """)
             self.conn.execute("""
             CREATE TABLE IF NOT EXISTS calibrations (
