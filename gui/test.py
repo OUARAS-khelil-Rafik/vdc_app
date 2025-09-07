@@ -23,6 +23,8 @@ from test_pages.HVAC_pages import (
     ACPHPage, DeltaPPage, HEPALeakPage, SmokePage, SmokeDynamicPage,
     ParticleClassPage, RecoveryPage, TempRHPage
 )
+from test_pages.Thermal_Mapping_pages import ThermalMappingPage
+from test_pages.Instrumentation_pages import InstrumentationPage
 
 # --------------------------- Main Window ------------------------------
 
@@ -60,6 +62,21 @@ class TestWidget(QWidget):
         self.key_by_item = {}
         for key, label in self.tests:
             it = QTreeWidgetItem([label]); self.roots["HVAC"].addChild(it); self.key_by_item[id(it)] = key
+
+        # Ajoute les tests pour Thermal Mapping
+        self.thermal_tests = [
+            ("Thermal_Mapping", "1) Thermal Mapping"),
+        ]
+        for key, label in self.thermal_tests:
+            it = QTreeWidgetItem([label]); self.roots["Thermal Mapping"].addChild(it); self.key_by_item[id(it)] = key
+
+        # Ajoute les tests pour Instrumentation
+        self.instrumentation_tests = [
+            ("Instrumentation", "1) Instrumentation"),
+        ]
+        for key, label in self.instrumentation_tests:
+            it = QTreeWidgetItem([label]); self.roots["Instrumentation"].addChild(it); self.key_by_item[id(it)] = key
+
         self.tree.expandAll()
         self.tree.currentItemChanged.connect(self.on_tree_change)
 
@@ -77,11 +94,16 @@ class TestWidget(QWidget):
             "Particle_Class": ParticleClassPage(self.db, get_pid),
             "Recovery_Time": RecoveryPage(self.db, get_pid),
             "Temp_RH": TempRHPage(self.db, get_pid),
+            "Thermal_Mapping": ThermalMappingPage(self.db, get_pid),
+            "Instrumentation": InstrumentationPage(self.db, get_pid),
         }
 
         # Wrap each page in a QScrollArea for better visual and scrolling
         self.scroll_areas: Dict[str, QScrollArea] = {}
-        for k, page in self.pages.items():
+        # Ajoute toutes les pages dans l'ordre des items de l'arbre
+        all_test_keys = [k for k, _ in self.tests] + [k for k, _ in self.thermal_tests] + [k for k, _ in self.instrumentation_tests]
+        for k in all_test_keys:
+            page = self.pages[k]
             scroll = QScrollArea()
             scroll.setWidgetResizable(True)
             scroll.setWidget(page)
@@ -112,7 +134,7 @@ class TestWidget(QWidget):
 
         self.stack = QStackedWidget()
         self.key_to_index: Dict[str, int] = {}
-        for i, (k, _) in enumerate(self.tests):
+        for i, k in enumerate(all_test_keys):
             self.stack.addWidget(self.scroll_areas[k])
             self.key_to_index[k] = i
 
