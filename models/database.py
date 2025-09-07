@@ -22,6 +22,7 @@ class Database:
         self.conn = sqlite3.connect(self.db_path)
         self.conn.row_factory = sqlite3.Row
 
+    # ------------------- Initialisation & Tables -------------------
     def initialize(self) -> None:
         """
         Crée (ou recrée) les tables nécessaires pour l'application.
@@ -52,11 +53,9 @@ class Database:
                 location          TEXT,
                 room_tag          TEXT,
                 test_date         TEXT NOT NULL,
-                contact_info      TEXT, -- Email + Numéro de téléphone (format libre, à parser côté app)
+                contact_info      TEXT,
                 work_type         TEXT NOT NULL CHECK(work_type IN ('HVAC','Thermal Mapping','Instrumentation')),
                 validation_status TEXT NOT NULL DEFAULT 'En attente' CHECK(validation_status IN ('En attente','Validé')),
-                -- Responsables: relation N:N via table d'association project_users
-                -- Les colonnes ci-dessous sont conservées pour compatibilité, mais non utilisées pour multi-users
                 assigned_to       INTEGER,
                 FOREIGN KEY (assigned_to) REFERENCES users(id)
             );
@@ -76,7 +75,7 @@ class Database:
             self.conn.execute("""
             CREATE TABLE IF NOT EXISTS thresholds (
                 id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                iso_name     TEXT,   -- ISO 1, ISO 2, etc. (NULL si seuil custom)
+                iso_name     TEXT,
                 test_name    TEXT NOT NULL,
                 value        REAL,
                 UNIQUE (iso_name, test_name)
@@ -86,18 +85,35 @@ class Database:
             # Sessions de tests
             self.conn.execute("""
             CREATE TABLE IF NOT EXISTS tests (
-                id               INTEGER PRIMARY KEY AUTOINCREMENT,
-                project_id       INTEGER NOT NULL,
-                technician_id    INTEGER NOT NULL,
-                test_name        TEXT    NOT NULL,
-                measurement_date TEXT    NOT NULL,
-                is_validated     INTEGER DEFAULT 0,
-                validated_by     INTEGER,
-                validated_date   TEXT,
-                FOREIGN KEY(project_id)     REFERENCES projects(id),
-                FOREIGN KEY(technician_id)  REFERENCES users(id),
-                FOREIGN KEY(validated_by)   REFERENCES users(id)
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER,
+                test_type TEXT,
+                status TEXT,
+                conformity INTEGER,
+                params_json TEXT,
+                results_json TEXT,
+                created_at TEXT,
+                updated_at TEXT
             );
+            """)
+
+            self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS default_thresholds (
+                test_type TEXT,
+                key TEXT,
+                value TEXT,
+                PRIMARY KEY(test_type, key)
+            );
+            """)
+
+            self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS project_thresholds (
+                project_id INTEGER,
+                test_type TEXT,
+                key TEXT,
+                value TEXT,
+                PRIMARY KEY(project_id, test_type, key)
+            )
             """)
 
             # Points de mesure
@@ -112,26 +128,23 @@ class Database:
             );
             """)
 
-            # models/database.py -> dans Database.initialize(self), à la fin (avant la fin du with self.conn:)
-            # ---------------------------
             # Étalons & étalonnages
-            # ---------------------------
             self.conn.execute("""
             CREATE TABLE IF NOT EXISTS standards (
                 id INTEGER PRIMARY KEY,
-                serial TEXT UNIQUE,                -- Unique serial number
+                serial TEXT UNIQUE,
                 name TEXT,
                 category TEXT,
                 manufacturer TEXT,
                 model TEXT,
                 location TEXT,
-                owner_id INTEGER,                  -- user ID of owner
+                owner_id INTEGER,
                 tags TEXT,
                 interval_months INTEGER,
                 last_cal_date TEXT,
                 next_cal_date TEXT,
-                status TEXT,                       -- OK / Soon due / Blocked
-                blocked INTEGER,                   -- 0/1 manual block
+                status TEXT,
+                blocked INTEGER,
                 block_reason TEXT,
                 certificate_path TEXT,
                 certificate_id TEXT,
@@ -140,7 +153,6 @@ class Database:
                 updated_at TEXT,
                 FOREIGN KEY (owner_id) REFERENCES users(id)
             );
-
             """)
             self.conn.execute("""
             CREATE TABLE IF NOT EXISTS calibrations (
@@ -159,7 +171,6 @@ class Database:
             );
             """)
 
-
             # Equipements des tests
             self.conn.execute("""
             CREATE TABLE IF NOT EXISTS equipment (
@@ -172,6 +183,7 @@ class Database:
             );
             """)
 
+    # ------------------- Utilisateurs -------------------
     def _hash_password(self, password: str) -> str:
         """
         Retourne le hash SHA-256 de la chaîne fournie.
@@ -191,7 +203,6 @@ class Database:
         """
         Crée un nouvel utilisateur (avec email et téléphone obligatoires) et renvoie son ID.
         """
-        # Validation du numéro de téléphone (obligatoire, non vide)
         if phone_number is None or str(phone_number).strip() == "":
             raise ValueError("Le numéro de téléphone est obligatoire.")
         phone_number = str(phone_number).strip()
@@ -232,6 +243,7 @@ class Database:
             }
         return None
 
+    # ------------------- Projets & Tests -------------------
     def create_test(
         self,
         project_id: int,
@@ -250,6 +262,7 @@ class Database:
         self.conn.commit()
         return cursor.lastrowid
 
+    # ------------------- Mesures -------------------
     def add_measurement(
         self,
         test_id: int,
@@ -267,10 +280,7 @@ class Database:
         )
         self.conn.commit()
 
-    # ----------------------------------------------------------------
-    # Méthodes pour l'équipement
-    # ----------------------------------------------------------------
-
+    # ------------------- Equipements -------------------
     def add_equipment(
         self,
         test_id: int,
@@ -315,4 +325,31 @@ class Database:
             "WHERE id = ?",
             (name, calibration_date, periodicity, equipment_id)
         )
+        self.conn.commit()
+
+    # ------------------- Seuils -------------------
+    def set_threshold(self, project_id: Optional[int], test_type: str, key: str, value: str) -> None:
+        """
+        Définit ou met à jour un seuil pour un projet et un type de test donné.
+        Si project_id est None, met à jour la table default_thresholds.
+        Sinon, met à jour la table project_thresholds.
+        """
+        if project_id is None:
+            self.conn.execute(
+                """
+                INSERT INTO default_thresholds (test_type, key, value)
+                VALUES (?, ?, ?)
+                ON CONFLICT(test_type, key) DO UPDATE SET value=excluded.value
+                """,
+                (test_type, key, value)
+            )
+        else:
+            self.conn.execute(
+                """
+                INSERT INTO project_thresholds (project_id, test_type, key, value)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(project_id, test_type, key) DO UPDATE SET value=excluded.value
+                """,
+                (project_id, test_type, key, value)
+            )
         self.conn.commit()

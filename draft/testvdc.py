@@ -35,7 +35,7 @@ import math
 import sqlite3
 import statistics as stats
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
 import sys
 from PyQt5.QtWidgets import QTabWidget
@@ -128,7 +128,7 @@ def set_status_pill(label: QLabel, ok: Optional[bool]):
 # --------------------------- Database ---------------------------------
 
 class DB:
-    def __init__(self, path: str = "hvac_qp.db"):
+    def __init__(self, path: str = "vdc.db"):
         self.path = path
         self.conn = sqlite3.connect(self.path)
         self.conn.row_factory = sqlite3.Row
@@ -136,23 +136,6 @@ class DB:
 
     def initialize(self):
         c = self.conn.cursor()
-        # Projects & users
-        c.execute(
-            """
-            CREATE TABLE IF NOT EXISTS projects (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                company TEXT,
-                name TEXT,
-                location TEXT,
-                tag TEXT,
-                work_type TEXT,
-                test_date TEXT,
-                contact TEXT,
-                responsables TEXT, -- comma-separated names for simplicity
-                notes TEXT
-            )
-            """
-        )
         c.execute(
             """
             CREATE TABLE IF NOT EXISTS default_thresholds (
@@ -207,8 +190,6 @@ class DB:
                 "default_tol_mode": "none", # none | plusminus_pct | plusminus_pa
                 "default_tol_value": "0"    # valeur de tol selon mode
             },
-            # ... le reste inchangé ...
-
             "Uniformity": {"seuil_uniformite": "20"},
             "HEPA_Leak": {"seuil_fuite_pct": "0.01", "signal_amont_min": "1.0"},
             "Particle_Class": {"debit_OPC_Lmin": "28.3"},
@@ -521,7 +502,7 @@ class ACPHPage(QWidget):
             table.setItem(r, 1, QTableWidgetItem(""))
         table.blockSignals(False)
 
-    def _sum_col(self, table: QTableWidget, col: int = 1) -> (float, int):
+    def _sum_col(self, table: QTableWidget, col: int = 1) -> Tuple[float, int]:
         total = 0.0; used = 0
         for r in range(table.rowCount()):
             it = table.item(r, col)
@@ -1674,33 +1655,6 @@ class HEPALeakPage(QWidget):
         self.evaluate_live()  # assure _last_result à jour
         self.db.save_test(pid, "HEPA_Leak", self._last_result.get("conforme"), {}, self._last_result)
         QMessageBox.information(self, "OK", "Résultat enregistré.")
-# Assurez-vous d'avoir les imports suivants quelque part dans votre projet :
-# from PyQt5.QtCore import Qt
-# from PyQt5.QtGui import QColor
-# from PyQt5.QtWidgets import (
-#     QWidget, QLabel, QFormLayout, QHBoxLayout, QVBoxLayout,
-#     QTableWidget, QTableWidgetItem, QGroupBox, QPushButton,
-#     QSpinBox, QDoubleSpinBox, QComboBox, QListWidget, QListWidgetItem,
-#     QMessageBox
-# )
-# import math
-# from typing import List, Dict
-#
-# Et une fonction utilitaire existante : set_status_pill(label: QLabel, ok: Optional[bool])
-# Assurez-vous d'avoir les imports suivants quelque part dans votre projet :
-# from PyQt5.QtCore import Qt
-# from PyQt5.QtGui import QColor
-# from PyQt5.QtWidgets import (
-#     QWidget, QLabel, QFormLayout, QHBoxLayout, QVBoxLayout,
-#     QTableWidget, QTableWidgetItem, QGroupBox, QPushButton,
-#     QSpinBox, QDoubleSpinBox, QComboBox, QListWidget, QListWidgetItem,
-#     QMessageBox
-# )
-# import math
-# from typing import List, Dict
-#
-# Et une fonction utilitaire existante : set_status_pill(label: QLabel, ok: Optional[bool])
-
 
 class ParticleClassPage(QWidget):
     """Comptage particulaire en air (ISO 14644‑1) – Évaluation LIVE **directe en /m³**
@@ -2044,43 +1998,6 @@ class ParticleClassPage(QWidget):
 
         QMessageBox.information(self, "OK", "Résultat enregistré.")
 
-
-# Imports requis (adapter à votre stack PyQt5/QtPy)
-# from PyQt5.QtCore import Qt
-# from PyQt5.QtGui import QColor
-# from PyQt5.QtWidgets import (
-#     QWidget, QLabel, QFormLayout, QHBoxLayout, QVBoxLayout,
-#     QPlainTextEdit, QGroupBox, QPushButton,
-#     QSpinBox, QDoubleSpinBox, QComboBox, QMessageBox
-# )
-# import math
-# from typing import Dict
-#
-# Util: set_status_pill(label: QLabel, ok: Optional[bool])
-# Imports requis (adapter à votre stack PyQt5/QtPy)
-# from PyQt5.QtCore import Qt
-# from PyQt5.QtGui import QColor
-# from PyQt5.QtWidgets import (
-#     QWidget, QLabel, QFormLayout, QHBoxLayout, QVBoxLayout,
-#     QGroupBox, QPushButton, QDoubleSpinBox, QComboBox, QMessageBox
-# )
-# from typing import Dict
-#
-# Util externe supposée: set_status_pill(label: QLabel, ok: Optional[bool])
-
-
-# Imports requis (adapter à votre stack PyQt5/QtPy)
-# from PyQt5.QtCore import Qt
-# from PyQt5.QtGui import QColor
-# from PyQt5.QtWidgets import (
-#     QWidget, QLabel, QFormLayout, QHBoxLayout, QVBoxLayout,
-#     QGroupBox, QPushButton, QDoubleSpinBox, QComboBox, QMessageBox
-# )
-# from typing import Dict
-#
-# Util externe supposée: set_status_pill(label: QLabel, ok: Optional[bool])
-
-
 class RecoveryPage(QWidget):
     """Recovery time – **ultra simple** (juste comparer un temps mesuré en minutes au seuil t_max)
 
@@ -2251,16 +2168,6 @@ class RecoveryPage(QWidget):
             self._last_result,
         )
         QMessageBox.information(self, "OK", "Résultat enregistré.")
-# Imports nécessaires (adaptez selon votre stack: PyQt5 / QtPy)
-# from PyQt5.QtCore import Qt
-# from PyQt5.QtWidgets import (
-#     QWidget, QLabel, QFormLayout, QHBoxLayout, QVBoxLayout,
-#     QTableWidget, QTableWidgetItem, QGroupBox, QPushButton,
-#     QHeaderView, QMessageBox, QComboBox
-# )
-# from typing import Optional
-#
-# Utilitaire existant attendu : set_status_pill(label: QLabel, ok: Optional[bool])
 
 
 class SmokePage(QWidget):
@@ -2549,8 +2456,6 @@ class SmokePage(QWidget):
         self.db.save_test(pid, self.TEST_KEY, ok_global, {}, result)
         QMessageBox.information(self, "OK", "Résultat enregistré.")
 
-
-
 from typing import List, Dict, Any, Optional
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QBrush
@@ -2559,9 +2464,6 @@ from PyQt5.QtWidgets import (
     QTableWidget, QTableWidgetItem, QGroupBox, QPushButton,
     QHeaderView, QMessageBox, QSpinBox, QDoubleSpinBox
 )
-
-# Externe attendu dans ton app : set_status_pill(QLabel, Optional[bool])
-# Externe optionnel : ThresholdEditor(db, get_project_id, key, fields)
 
 
 class TempRHPage(QWidget):

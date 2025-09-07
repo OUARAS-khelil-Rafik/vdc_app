@@ -1,134 +1,113 @@
 # models/testmanager.py
 
 from typing import List, Tuple, Optional
-from datetime import date
-from .thresholdmanager import ThresholdManager
+from datetime import datetime
+import json
 
 class TestManager:
     def __init__(self, db):
         self.db = db
 
-    def get_thresholds(self, iso_class: str) -> List[str]:
+    # ---------- Thresholds ----------
+    def get_threshold(
+        self, 
+        project_id: Optional[int], 
+        test_type: str, 
+        key: str, 
+        fallback: Optional[str] = None
+    ) -> Optional[str]:
         """
-        Retourne la liste des paramètres de test pour une classe ISO donnée.
+        Récupère la valeur d'un seuil pour un projet et un type de test donné.
+        Prend la valeur spécifique au projet si elle existe, sinon la valeur par défaut.
         """
-        rows = self.db.conn.execute(
-            "SELECT test_name FROM thresholds WHERE iso_name = ?",
-            (iso_class,)
-        ).fetchall()
-        return [row["test_name"] for row in rows]
-
-    def get_required_points(self, project_id: int) -> int:
-        """
-        Retourne le nombre de points requis pour un projet donné.
-        """
-        row = self.db.conn.execute(
-            "SELECT cleanroom_area FROM projects WHERE id = ?",
-            (project_id,)
-        ).fetchone()
-        if not row or row["cleanroom_area"] is None:
-            return 0
-        return ThresholdManager(self.db).compute_required_points(row["cleanroom_area"])
-
-    def get_latest_test(self, project_id: int, technician_id: int) -> Optional[dict]:
-        """
-        Récupère la dernière session de test pour ce projet et ce technicien.
-        """
-        row = self.db.conn.execute(
-            "SELECT * FROM tests "
-            "WHERE project_id = ? AND technician_id = ? "
-            "ORDER BY measurement_date DESC, id DESC LIMIT 1",
-            (project_id, technician_id)
-        ).fetchone()
-        return dict(row) if row else None
-
-    def get_measurements(self, test_id: int) -> List[dict]:
-        """
-        Récupère toutes les mesures d'une session de test.
-        """
-        rows = self.db.conn.execute(
-            "SELECT id, point_name, parameter, value "
-            "FROM measurements WHERE test_id = ? ORDER BY id",
-            (test_id,)
-        ).fetchall()
-        return [dict(r) for r in rows]
-
-    def update_measurement(self, measurement_id: int, value: float) -> None:
-        """
-        Met à jour la valeur d'une mesure existante.
-        """
-        self.db.conn.execute(
-            "UPDATE measurements SET value = ? WHERE id = ?",
-            (value, measurement_id)
+        c = self.db.conn.cursor()
+        if project_id is not None:
+            c.execute(
+                "SELECT value FROM project_thresholds WHERE project_id=? AND test_type=? AND key=?",
+                (project_id, test_type, key)
+            )
+            row = c.fetchone()
+            if row:
+                return row[0]
+        c.execute(
+            "SELECT value FROM default_thresholds WHERE test_type=? AND key=?",
+            (test_type, key)
         )
-        self.db.conn.commit()
+        row = c.fetchone()
+        return row[0] if row else fallback
 
-    def add_measurement(self, test_id: int, point_name: str, parameter: str, value: float) -> None:
-        """
-        Ajoute une nouvelle mesure à une session existante.
-        """
-        self.db.add_measurement(test_id, point_name, parameter, value)
-
-    def save_test(
-        self,
-        project_id: int,
-        technician_id: int,
-        test_name: str,
-        measurements: List[Tuple[str, str, float, Optional[int]]]
-    ) -> int:
-        """
-        Crée une nouvelle session de test et enregistre toutes les mesures.
-        Si une session existe déjà pour ce (project, technician), elle n'est pas supprimée.
-        """
-        test_id = self.db.create_test(
-            project_id, technician_id, test_name, date.today().isoformat()
-        )
-        for point_name, parameter, value, _ in measurements:
-            if value is not None:
-                self.db.add_measurement(test_id, point_name, parameter, value)
-        return test_id
-
-    def validate_test(self, test_id: int, admin_id: int) -> None:
-        """
-        Marque une session comme validée par l'admin.
-        """
-        self.db.conn.execute(
-            "UPDATE tests SET is_validated = 1, validated_by = ?, validated_date = ? "
-            "WHERE id = ?",
-            (admin_id, date.today().isoformat(), test_id)
-        )
-        self.db.conn.commit()
-
-    # ----------------------------------------------------------------
-    # Gestion de l'équipement
-    # ----------------------------------------------------------------
-
-    def add_equipment(
-        self,
-        test_id: int,
-        name: str,
-        calibration_date: str,
-        periodicity: str
-    ) -> int:
-        """
-        Crée un enregistrement d'équipement pour une session de test.
-        """
-        return self.db.add_equipment(test_id, name, calibration_date, periodicity)
-
-    def get_equipments(self, test_id: int) -> List[dict]:
-        """
-        Liste les équipements d'une session.
-        """
-        return self.db.get_equipments(test_id)
-
-    def update_equipment(
-        self,
-        equipment_id: int,
-        name: str,
-        calibration_date: str,
-        periodicity: str
+    def set_threshold(
+        self, 
+        project_id: Optional[int], 
+        test_type: str, 
+        key: str, 
+        value: str
     ) -> None:
         """
-        Met à jour les infos d'un équipement.
+        Définit ou met à jour un seuil pour un projet ou globalement.
         """
-        self.db.update_equipment(equipment_id, name, calibration_date, periodicity)
+        c = self.db.conn.cursor()
+        if project_id is None:
+            c.execute(
+                "REPLACE INTO default_thresholds(test_type, key, value) VALUES (?,?,?)",
+                (test_type, key, value)
+            )
+        else:
+            c.execute(
+                "REPLACE INTO project_thresholds(project_id, test_type, key, value) VALUES (?,?,?,?)",
+                (project_id, test_type, key, value)
+            )
+        self.db.conn.commit()
+
+    # ---------- Projects ----------
+    def add_project(self, data: dict) -> int:
+        """
+        Ajoute un nouveau projet à la base de données.
+        """
+        c = self.db.conn.cursor()
+        c.execute(
+            """
+            INSERT INTO projects(company, name, location, tag, work_type, test_date, contact, responsables, notes)
+            VALUES(:company, :name, :location, :tag, :work_type, :test_date, :contact, :responsables, :notes)
+            """,
+            data
+        )
+        self.db.conn.commit()
+        return c.lastrowid
+
+    def list_projects(self) -> list:
+        """
+        Retourne la liste de tous les projets.
+        """
+        c = self.db.conn.cursor()
+        c.execute("SELECT * FROM projects ORDER BY id DESC")
+        return c.fetchall()
+
+    # ---------- Tests ----------
+    def save_test(
+        self, 
+        project_id: int, 
+        test_type: str, 
+        conformity: Optional[bool], 
+        params: dict, 
+        results: dict
+    ) -> None:
+        """
+        Enregistre un test pour un projet donné.
+        """
+        now = datetime.utcnow().isoformat()
+        c = self.db.conn.cursor()
+        c.execute(
+            """
+            INSERT INTO tests(project_id, test_type, status, conformity, params_json, results_json, created_at, updated_at)
+            VALUES(?,?,?,?,?,?,?,?)
+            """,
+            (
+                project_id, test_type, "done",
+                None if conformity is None else (1 if conformity else 0),
+                json.dumps(params, ensure_ascii=False),
+                json.dumps(results, ensure_ascii=False),
+                now, now
+            )
+        )
+        self.db.conn.commit()

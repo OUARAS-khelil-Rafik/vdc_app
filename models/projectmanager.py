@@ -4,6 +4,43 @@ class ProjectManager:
     def __init__(self, db):
         self.db = db
 
+    def list_projects(self):
+        """
+        Returns a list of all projects as dictionaries.
+        """
+        cursor = self.db.conn.cursor()
+        cursor.execute("""
+            SELECT
+                p.id,
+                p.company_name,
+                p.location,
+                p.room_tag,
+                GROUP_CONCAT(u.full_name, ', ') AS assigned_to,
+                p.test_date,
+                p.contact_info,
+                p.work_type,
+                p.validation_status
+            FROM projects p
+            LEFT JOIN project_users pu ON p.id = pu.project_id
+            LEFT JOIN users u ON pu.user_id = u.id
+            GROUP BY p.id
+            ORDER BY p.test_date DESC
+        """)
+        rows = cursor.fetchall()
+        return [
+            dict_from_row(row, [
+                "id",
+                "company_name",
+                "location",
+                "room_tag",
+                "assigned_to",
+                "test_date",
+                "contact_info",
+                "work_type",
+                "validation_status"
+            ]) for row in rows
+        ]
+
     def get_projects(self, start_date=None, end_date=None, company_name=None):
         cursor = self.db.conn.cursor()
         query = """
@@ -159,3 +196,4 @@ class ProjectManager:
         # Puis supprimer le projet
         cursor.execute("DELETE FROM projects WHERE id = ?", (project_id,))
         self.db.conn.commit()
+

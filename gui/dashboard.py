@@ -1,5 +1,5 @@
 # gui/dashboard.py
-# -*- coding: utf-8 -*-
+
 """
 Tableau de bord principal de l’application VDC Engineering (MVP).
 
@@ -16,6 +16,7 @@ Fonctionnalités :
 - Affiche un message de bienvenue et rafraîchit les vues au moment de l’affichage.
 """
 
+# ---------------------- Imports ----------------------
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QLabel, QVBoxLayout,
     QSizePolicy, QToolBar, QAction
@@ -23,17 +24,15 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 
-from .login       import LoginWindow
-from .project     import ProjectWidget
-from .users       import UsersWidget
-# from .test        import TestSessionWidget  # Active si ton module Tests est prêt
-from .etalons     import EtalonsWidget       # <<< Nouveau widget
+from .login   import LoginWindow
+from .project import ProjectWidget
+from .users   import UsersWidget
+from .test    import TestWidget
+from .etalons import EtalonsWidget
 
 # ---------------------- Barre d’outils ----------------------
-
 class DashboardToolbar(QToolBar):
     def __init__(self, user, parent=None):
-        _ = user  # éviter l’avertissement linter
         super().__init__("Tableau de bord", parent)
         self.setMovable(False)
         self.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
@@ -52,11 +51,10 @@ class DashboardToolbar(QToolBar):
         self.actions_dict = {
             'projects': QAction(QIcon("icons/projects.png"),   "Projets",      self),
             'tests':    QAction(QIcon("icons/tests.png"),      "Tests",        self),
-            'etalons':  QAction(QIcon("icons/etalons.png"),  "Étalons",      self),
+            'etalons':  QAction(QIcon("icons/etalons.png"),    "Étalons",      self),
             'users':    QAction(QIcon("icons/users.png"),      "Utilisateurs", self),
             'logout':   QAction(QIcon("icons/logout.png"),     "Déconnexion",  self)
         }
-        # Affiche uniquement les icônes (texte dans tooltips si besoin)
         for act in self.actions_dict.values():
             act.setIconText(act.text())
             act.setText("")
@@ -71,9 +69,7 @@ class DashboardToolbar(QToolBar):
         self.addAction(self.actions_dict['logout'])
         self.addWidget(spacer_r)
 
-
 # ---------------------- Fenêtre principale ----------------------
-
 class DashboardWindow(QMainWindow):
     def __init__(self, db, user):
         super().__init__()
@@ -139,14 +135,14 @@ class DashboardWindow(QMainWindow):
 
         # Instanciation des widgets principaux
         self.project_widget  = ProjectWidget(self.db, self.user)
-        # self.tests_widget    = TestSessionWidget(self.db, self.user)  # Dé-commente si nécessaire
+        self.tests_widget    = TestWidget(self.db, self.user)
         self.etalons_widget  = EtalonsWidget(self.db, self.user)
         self.users_widget    = UsersWidget(self.db)
 
         # Ajout au layout (tous cachés sauf celui affiché)
         for w in (
             self.project_widget,
-            # self.tests_widget,
+            self.tests_widget,
             self.etalons_widget,
             self.users_widget
         ):
@@ -156,10 +152,9 @@ class DashboardWindow(QMainWindow):
         self.show_projects()
 
     # ----------------- Vues -----------------
-
     def _hide_all(self):
         self.project_widget.hide()
-        # if hasattr(self, 'tests_widget'): self.tests_widget.hide()
+        if hasattr(self, 'tests_widget'): self.tests_widget.hide()
         self.etalons_widget.hide()
         self.users_widget.hide()
 
@@ -170,9 +165,9 @@ class DashboardWindow(QMainWindow):
 
     def show_tests(self):
         self._hide_all()
-        # if hasattr(self, 'tests_widget'):
-        #     self.tests_widget.refresh()
-        #     self.tests_widget.show()
+        if hasattr(self, 'tests_widget'):
+            self.tests_widget.reload_projects()
+            self.tests_widget.show()
 
     def show_etalons(self):
         self._hide_all()
@@ -185,7 +180,6 @@ class DashboardWindow(QMainWindow):
         self.users_widget.show()
 
     # ----------------- Session -----------------
-
     def logout(self):
         self.login_window = LoginWindow(self.db)
         self.login_window.show()
