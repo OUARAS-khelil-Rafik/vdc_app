@@ -4,77 +4,21 @@ import sqlite3
 import statistics as stats
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
-
 import sys
-from PyQt5.QtWidgets import QTabWidget
-import math
-from typing import Dict, List
 
 from qtpy.QtCore import Qt
 from qtpy.QtGui import QColor
 from qtpy.QtWidgets import (
     QWidget, QLabel, QFormLayout, QHBoxLayout, QVBoxLayout,
     QTableWidget, QTableWidgetItem, QGroupBox, QPushButton,
-    QSpinBox, QDoubleSpinBox, QComboBox, QListWidget, QListWidgetItem
-)
-
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor
-from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QTreeWidget, QTreeWidgetItem,
-    QStackedWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QLineEdit,
-    QPlainTextEdit, QPushButton, QComboBox, QMessageBox, QTableWidget,
-    QTableWidgetItem, QSpinBox, QDoubleSpinBox, QCheckBox, QGroupBox, QHeaderView,
-    QFileDialog
+    QSpinBox, QDoubleSpinBox, QComboBox, QListWidget, QListWidgetItem,
+    QApplication, QMainWindow, QTreeWidget, QTreeWidgetItem,
+    QStackedWidget, QLineEdit, QPlainTextEdit, QMessageBox,
+    QCheckBox, QHeaderView, QFileDialog, QTabWidget
 )
 
 from models.projectmanager import ProjectManager
 from models.testmanager    import TestManager
-
-def air_density_from_TP(T_C: float, P_mbar: float = 1013.25) -> float:
-    """
-    Densité de l'air (kg/m³) calculée à partir de T (°C) et P (mbar).
-    Formule gaz parfaits : rho = P / (R * T_K), avec P en Pa, R=287.05 J/kg/K.
-    """
-    T_K = T_C + 273.15
-    P_Pa = P_mbar * 100.0
-    R = 287.05
-    return P_Pa / (R * T_K)
-
-def table_non_empty_floats(tbl, cols_from: int = 0) -> List[float]:
-    """Parcourt un QTableWidget et renvoie toutes les valeurs numériques non vides (float)."""
-    vals: List[float] = []
-    for r in range(tbl.rowCount()):
-        for c in range(cols_from, tbl.columnCount()):
-            it = tbl.item(r, c)
-            if not it:
-                continue
-            raw = (it.text() or "").strip()
-            if not raw:
-                continue
-            try:
-                vals.append(float(raw.replace(",", ".")))
-            except Exception:
-                pass
-    return vals
-
-def parse_floats(text: str) -> List[float]:
-    """Parse a comma/space/semicolon/newline separated list of numbers into floats."""
-    if not text.strip():
-        return []
-    parts = [p.strip() for p in text.replace("\n", ",").replace(";", ",").split(",")]
-    out = []
-    for p in parts:
-        if not p:
-            continue
-        try:
-            out.append(float(p))
-        except ValueError:
-            try:
-                out.append(float(p.replace(" ", "").replace(",", ".")))
-            except ValueError:
-                pass
-    return out
 
 def set_status_pill(label, ok: Optional[bool]):
     """Green/Red/Gray pill indicator on a QLabel based on ok flag."""
@@ -121,9 +65,6 @@ class ThresholdEditor(QWidget):
 
 
 # --------------------------- Test Pages -------------------------------
-# Nécessaire si pas déjà importé plus haut :
-# from PyQt5.QtWidgets import QTabWidget
-
 class ACPHPage(QWidget):
     """
     Débit & ACPH — 4 modes + évaluation en direct
