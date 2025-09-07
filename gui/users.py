@@ -27,12 +27,13 @@ Remarques :
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QTableWidgetItem, QHeaderView, QSizePolicy, QTableWidget,
-    QPushButton, QHBoxLayout, QDialog, QFormLayout, QLineEdit, QComboBox, QMessageBox, QLabel
+    QPushButton, QHBoxLayout, QDialog, QFormLayout, QLineEdit, QComboBox, QMessageBox, QLabel, QApplication
 )
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor
+from PyQt5.QtGui import QColor, QIcon
 from models.usermanager import UserManager
 import sqlite3
+import os
 
 # Define theme colors
 THEME_PRIMARY = "#1c5ea3"
@@ -162,58 +163,217 @@ class UserForm(QDialog):
         )
 
 class UsersTable(NoFocusTableWidget):
-    HEADERS = ["ID", "Nom d'utilisateur", "Nom complet", "Rôle", "Email", "Téléphone", "Validation"]
-    # Order must match fetch_users tuple: (id, username, full_name, role, email, phone_number, validate_user)
-    COLUMNS = ["id", "username", "full_name", "role", "email", "phone_number", "validate_user"]
+    HEADERS = [
+        "ID", "Nom d'utilisateur", "Nom complet", "Rôle", "Email", "Téléphone", "Validation", "Actions"
+    ]
+    COLUMNS = [
+        "id", "username", "full_name", "role", "email", "phone_number", "validate_user"
+    ]
+    DEFAULT_COLUMN_WIDTHS = [60, 200, 200, 180, 200, 150, 120, 60]
+    DEFAULT_ROW_HEIGHT = 36
 
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__(0, len(self.HEADERS), parent)
         self.setColumnCount(len(self.HEADERS))
         self.setHorizontalHeaderLabels(self.HEADERS)
         self.setSelectionBehavior(self.SelectRows)
-        self.setSelectionMode(self.ExtendedSelection)
+        self.setSelectionMode(self.SingleSelection)
         self.setEditTriggers(self.NoEditTriggers)
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.horizontalHeader().setStretchLastSection(True)
+        self.verticalHeader().setSectionResizeMode(QHeaderView.Interactive)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setMinimumHeight(200)
         self.verticalHeader().setVisible(False)
         self.horizontalHeader().setDefaultAlignment(Qt.AlignCenter | Qt.AlignVCenter)
-        self.setStyleSheet("""
-            QTableWidget {
-                background-color: #fff; 
-                gridline-color: #1c5ea3; 
-                selection-color: #1c5ea3; 
-                border: 2px solid #1c5ea3; 
+        self.setWordWrap(True)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setShowGrid(True)
+        self.setAlternatingRowColors(True)
+        self.setStyleSheet(f"""
+            QTableWidget {{
+                gridline-color: {THEME_PRIMARY};
+                border: 2px solid {THEME_PRIMARY};
                 font-size: 13px;
-                font-weight: bold;
                 border-radius: 8px;
-            }
-            QHeaderView::section {
-                background-color: #1c5ea3; color: #fff; font-weight: bold;
+                background-color: #fff;
+                selection-color: #1c5ea3; 
+                font-weight: bold;
+            }}
+            QHeaderView::section {{
+                background-color: {THEME_PRIMARY}; color: #fff; font-weight: bold;
                 border: none; padding: 6px; qproperty-alignment: 'AlignCenter | AlignVCenter';
-            }
+            }}
+            QScrollBar:vertical, QScrollBar:horizontal {{
+                background: #e0e0e0;
+                border-radius: 6px;
+                width: 12px;
+                height: 12px;
+                margin: 2px;
+            }}
+            QScrollBar::handle:vertical, QScrollBar::handle:horizontal {{
+                background: {THEME_ACCENT};
+                border-radius: 6px;
+                min-height: 30px;
+                min-width: 30px;
+            }}
+            QScrollBar::add-line, QScrollBar::sub-line {{
+                background: none;
+                border: none;
+            }}
         """)
+        self._restore_default_sizes()
+
+    def _restore_default_sizes(self):
+        for col, width in enumerate(self.DEFAULT_COLUMN_WIDTHS[:self.columnCount()]):
+            self.setColumnWidth(col, width)
+        for row in range(self.rowCount()):
+            self.setRowHeight(row, self.DEFAULT_ROW_HEIGHT)
 
     def populate(self, rows):
         self.setRowCount(len(rows))
+        icon_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "icons"))
         for i, user in enumerate(rows):
-            for col, _ in enumerate(self.COLUMNS):
+            for col, key in enumerate(self.COLUMNS):
                 val = user[col] if col < len(user) else ""
                 # Normalize validation display if stored as 0/1
                 if col == 6:
-                    if val in (1, "1", True):
+                    if val in (1, "1", True, "Validé"):
                         val = "Validé"
-                    elif val in (0, "0", False):
+                    elif val in (0, "0", False, "Non validé"):
                         val = "Non validé"
                 item = QTableWidgetItem("" if val is None else str(val))
                 item.setTextAlignment(Qt.AlignCenter)
-                item.setBackground(QColor(Qt.white))
+                item.setFlags(item.flags() | Qt.TextWordWrap)
+                if col == 6:
+                    # Color validation cell: green for "Validé", yellow for "Non validé"
+                    if str(val).lower() == "validé":
+                        item.setForeground(QColor("#4CAF50"))
+                    elif str(val).lower() == "non validé":
+                        item.setForeground(QColor("#F3B805"))
                 if col == 0:
                     item.setData(Qt.UserRole, user[0])
                 self.setItem(i, col, item)
-        self.resizeColumnsToContents()
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+            # Actions column
+            action_widget = QWidget()
+            h_layout = QHBoxLayout(action_widget)
+            h_layout.setContentsMargins(0, 0, 0, 0)
+            h_layout.setSpacing(5)
+            h_layout.addStretch()
+
+            email = user[4]
+            phone = user[5]
+            is_valid = str(user[6]).lower() in ("1", "validé", "true", "oui")
+
+            btn_email = QPushButton()
+            btn_email.setIcon(QIcon(os.path.join(icon_dir, "email.png")))
+            btn_email.setToolTip("Envoyer Email")
+            btn_email.setFixedSize(28, 28)
+            btn_email.setStyleSheet("""
+                QPushButton {
+                    border: none;
+                    background: transparent;
+                }
+                QPushButton:focus, QPushButton:hover {
+                    background: #e6f0fa;
+                }
+            """)
+            btn_email.clicked.connect(lambda _, email=email: self.show_email_dialog(email))
+
+            btn_phone = QPushButton()
+            btn_phone.setIcon(QIcon(os.path.join(icon_dir, "appel.png")))
+            btn_phone.setToolTip("Afficher Numéro Téléphone")
+            btn_phone.setFixedSize(28, 28)
+            btn_phone.setStyleSheet("""
+                QPushButton {
+                    border: none;
+                    background: transparent;
+                }
+                QPushButton:focus, QPushButton:hover {
+                    background: #e6f0fa;
+                }
+            """)
+            btn_phone.clicked.connect(lambda _, phone=phone: self.show_phone_dialog(phone))
+
+            h_layout.addWidget(btn_email)
+            h_layout.addWidget(btn_phone)
+            h_layout.addStretch()
+            action_widget.setLayout(h_layout)
+            self.setCellWidget(i, len(self.COLUMNS), action_widget)
+            self.setRowHeight(i, self.DEFAULT_ROW_HEIGHT)
+        self._restore_default_sizes()
+
+    def show_phone_dialog(self, phone):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Téléphone")
+        dialog.setModal(True)
+        dialog.resize(320, 140)
+        dialog.setStyleSheet("""
+            QDialog { background-color: #f0f0f0; }
+            QLabel { background: #f0f0f0; color: #1c5ea3; font-weight: bold; font-size: 15px; }
+            QPushButton {
+                background-color: #b8d5ed; color: #1c5ea3; border: none; border-radius: 4px;
+                padding: 6px 18px; font-size: 14px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: #1c5ea3; color: #fff; }
+            QPushButton:pressed { background-color: #14406e; }
+        """)
+        layout = QVBoxLayout(dialog)
+        label = QLabel(f"Numéro : {phone if phone else 'Aucun numéro disponible.'}")
+        label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(label)
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        if phone:
+            btn_copy = QPushButton("Copier le numéro")
+            btn_copy.clicked.connect(lambda: self.copy_to_clipboard(phone))
+            btn_layout.addWidget(btn_copy)
+        btn_close = QPushButton("Fermer")
+        btn_close.clicked.connect(dialog.accept)
+        btn_layout.addWidget(btn_close)
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+        dialog.setLayout(layout)
+        dialog.exec_()
+
+    def show_email_dialog(self, email):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Email")
+        dialog.setModal(True)
+        dialog.resize(320, 140)
+        dialog.setStyleSheet("""
+            QDialog { background-color: #f0f0f0; }
+            QLabel { background: #f0f0f0; color: #1c5ea3; font-weight: bold; font-size: 15px; }
+            QPushButton {
+                background-color: #b8d5ed; color: #1c5ea3; border: none; border-radius: 4px;
+                padding: 6px 18px; font-size: 14px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: #1c5ea3; color: #fff; }
+            QPushButton:pressed { background-color: #14406e; }
+        """)
+        layout = QVBoxLayout(dialog)
+        label = QLabel(f"Adresse email : {email if email else 'Aucune adresse email disponible.'}")
+        label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(label)
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        if email:
+            btn_copy = QPushButton("Copier l'email")
+            btn_copy.clicked.connect(lambda: self.copy_to_clipboard(email))
+            btn_layout.addWidget(btn_copy)
+        btn_close = QPushButton("Fermer")
+        btn_close.clicked.connect(dialog.accept)
+        btn_layout.addWidget(btn_close)
+        btn_layout.addStretch()
+        layout.addLayout(btn_layout)
+        dialog.setLayout(layout)
+        dialog.exec_()
+
+    def copy_to_clipboard(self, text):
+        clipboard = QApplication.clipboard()
+        clipboard.setText(text)
+        QMessageBox.information(self, "Copié", f"Copié dans le presse-papier : {text}", QMessageBox.Ok)
 
     def get_selected_user_id(self):
         sel = self.currentRow()

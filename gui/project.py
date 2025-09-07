@@ -23,8 +23,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QDate, QUrl
 from PyQt5.QtGui import QColor, QIcon, QDesktopServices, QIntValidator
-from models.projectmanager import ProjectManager
-from models.utils import dict_from_row        
+from models.projectmanager import ProjectManager    
 from PyQt5.QtWidgets import QLabel
 from PyQt5.QtWidgets import QListWidget, QListWidgetItem
 from PyQt5.QtWidgets import QApplication
@@ -33,118 +32,106 @@ from PyQt5.QtWidgets import QApplication
 THEME_PRIMARY = "#1c5ea3"
 THEME_ACCENT = "#b8d5ed"
 
-class NoFocusTableWidget(QTableWidget):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.setFocusPolicy(Qt.NoFocus)
-
-class ProjectTable(NoFocusTableWidget):
+class ProjectTable(QTableWidget):
     HEADERS = [
-        "ID Projet", "Nom Entreprise", "Localisation", "Tag", "Responsables",
+        "ID Projet", "Nom Entreprise", "Localisation", "Tag", "Responsable(s)",
         "Date de Test", "Type de travail", "Statut", "Actions"
     ]
     COLUMNS = [
         "id", "company_name", "location", "room_tag", "responsables",
         "test_date", "work_type", "validation_status"
     ]
+    # Default column widths (pixels) for a nice initial layout
+    DEFAULT_COLUMN_WIDTHS = [70, 150, 150, 120, 200, 110, 200, 100, 90]
+    DEFAULT_ROW_HEIGHT = 36
 
     def __init__(self, parent=None, user=None):
-        super().__init__(parent)
+        super().__init__(0, len(self.HEADERS), parent)
         self.user = user
         self.show_actions = True
         if self.user and self.user.get("role") in ("Technicien", "Technicien responsable"):
             self.show_actions = False
-
         headers = self.HEADERS if self.show_actions else self.HEADERS[:-1]
+        headers_wrapped = [h.replace(" ", "\n") if len(h) > 20 else h for h in headers]
         self.setColumnCount(len(headers))
-        self.setHorizontalHeaderLabels(headers)
+        self.setHorizontalHeaderLabels(headers_wrapped)
         self.setSelectionBehavior(self.SelectRows)
         self.setSelectionMode(self.SingleSelection)
         self.setEditTriggers(self.NoEditTriggers)
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.horizontalHeader().setStretchLastSection(True)
+        self.verticalHeader().setSectionResizeMode(QHeaderView.Interactive)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setMinimumHeight(200)
         self.verticalHeader().setVisible(False)
         self.horizontalHeader().setDefaultAlignment(Qt.AlignCenter | Qt.AlignVCenter)
-        # Use THEME_PRIMARY and THEME_ACCENT for consistent styling
+        self.setWordWrap(True)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setShowGrid(True)
+        self.setAlternatingRowColors(True)
         self.setStyleSheet(f"""
-            QPushButton {{
-            background-color: {THEME_PRIMARY}; color: #fff; border-radius: 8px;
-            padding: 8px 24px; font-weight: bold; font-size: 14px; border: none;
-            }}
-            QPushButton:hover {{ background-color: {THEME_ACCENT}; color: {THEME_PRIMARY}; }}
             QTableWidget {{
-                background-color: #fff; 
-                gridline-color: {THEME_PRIMARY};
-                selection-color: {THEME_PRIMARY}; 
-                border: 2px solid {THEME_PRIMARY};
-                font-size: 13px;
-                font-weight: bold;
-                border-radius: 8px;
+            gridline-color: {THEME_PRIMARY};
+            border: 2px solid {THEME_PRIMARY};
+            font-size: 13px;
+            border-radius: 8px;
+            background-color: #fff;
+            selection-color: #1c5ea3; 
+            font-weight: bold;
             }}
             QHeaderView::section {{
             background-color: {THEME_PRIMARY}; color: #fff; font-weight: bold;
             border: none; padding: 6px; qproperty-alignment: 'AlignCenter | AlignVCenter';
             }}
-            QLineEdit, QComboBox {{
-            background: #fff; border: 1px solid {THEME_ACCENT}; border-radius: 4px; padding: 4px 8px; font-size: 14px;
+            QScrollBar:vertical, QScrollBar:horizontal {{
+            background: #e0e0e0;
+            border-radius: 6px;
+            width: 12px;
+            height: 12px;
+            margin: 2px;
             }}
-            QLineEdit:focus, QComboBox:focus {{ border: 2px solid {THEME_PRIMARY}; }}
-            QLabel {{ color: {THEME_PRIMARY}; font-weight: bold; font-size: 13px; }}
+            QScrollBar::handle:vertical, QScrollBar::handle:horizontal {{
+            background: {THEME_ACCENT};
+            border-radius: 6px;
+            min-height: 30px;
+            min-width: 30px;
+            }}
+            QScrollBar::add-line, QScrollBar::sub-line {{
+            background: none;
+            border: none;
+            }}
         """)
+        self._restore_default_sizes()
+
+    def _restore_default_sizes(self):
+        for col, width in enumerate(self.DEFAULT_COLUMN_WIDTHS[:self.columnCount()]):
+            self.setColumnWidth(col, width)
+        for row in range(self.rowCount()):
+            self.setRowHeight(row, self.DEFAULT_ROW_HEIGHT)
 
     def populate(self, rows):
-        filtered_rows = []
-        if self.user:
-            role = self.user.get("role")
-            user_id = self.user.get("id")
-            # Superviseur = Admin
-            if role in ("Administrateur", "Admin", "Superviseur"):
-                filtered_rows = rows
-            else:
-                for row in rows:
-                    responsables_ids = []
-                    if "responsables_ids" in row:
-                        responsables_ids = row["responsables_ids"]
-                    else:
-                        cursor = self.parent().db.conn.cursor()
-                        cursor.execute("SELECT user_id FROM project_users WHERE project_id=?", (row["id"],))
-                        responsables_ids = [r["user_id"] for r in cursor.fetchall()]
-                    if user_id in responsables_ids:
-                        filtered_rows.append(row)
-        else:
-            filtered_rows = rows
-
-        self.setRowCount(len(filtered_rows))
+        self.setRowCount(len(rows))
         icon_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "icons"))
-        for i, row in enumerate(filtered_rows):
+        for i, row in enumerate(rows):
             row = dict(row)
-            value_responsables = row.get("responsables", "")
-            contact_info = row.get("contact_info", "")
-            contact_email, contact_phone = "", ""
-            if contact_info:
-                parts = contact_info.split("/")
-                contact_email = parts[0].strip() if len(parts) > 0 else ""
-                contact_phone = parts[1].strip() if len(parts) > 1 else ""
             for col, key in enumerate(self.COLUMNS):
-                if key == "responsables":
-                    value = value_responsables
-                    item = QTableWidgetItem(str(value))
-                    item.setTextAlignment(Qt.AlignCenter)
-                    item.setBackground(QColor(Qt.white))
-                    if col == 0:
-                        item.setData(Qt.UserRole, row.get('id'))
-                    self.setItem(i, col, item)
-                else:
-                    value = row.get(key, "")
-                    item = QTableWidgetItem(str(value))
-                    item.setTextAlignment(Qt.AlignCenter)
-                    item.setBackground(QColor(Qt.white))
-                    if col == 0:
-                        item.setData(Qt.UserRole, row.get('id'))
-                    self.setItem(i, col, item)
-            # Actions column (last column)
+                value = row.get(key, "")
+                if isinstance(value, str) and len(value) > 30:
+                    value = self._wrap_text(value, 30)
+                item = QTableWidgetItem(str(value))
+                item.setTextAlignment(Qt.AlignCenter)
+                item.setFlags(item.flags() | Qt.TextWordWrap)
+                if key == "validation_status":
+                    status = row.get(key, "")
+                    # Color status cell: green for "Validé", yellow for "En attente"
+                    if status.lower() == "validé":
+                        item.setForeground(QColor("#4CAF50"))
+                    elif status.lower() == "en attente":
+                        item.setForeground(QColor("#F3B805"))
+                if col == 0:
+                    item.setData(Qt.UserRole, row.get('id'))
+                self.setItem(i, col, item)
             if self.show_actions:
                 action_widget = QWidget()
                 h_layout = QHBoxLayout(action_widget)
@@ -152,7 +139,10 @@ class ProjectTable(NoFocusTableWidget):
                 h_layout.setSpacing(5)
                 h_layout.addStretch()
 
-                # Contact buttons
+                contact_email = row.get("contact_email", "")
+                contact_phone = row.get("contact_phone", "")
+                is_valid = row.get("validation_status", "").lower() == "validé"
+
                 btn_email = QPushButton()
                 btn_email.setIcon(QIcon(os.path.join(icon_dir, "email.png")))
                 btn_email.setToolTip("Envoyer Email")
@@ -182,11 +172,6 @@ class ProjectTable(NoFocusTableWidget):
                     }
                 """)
                 btn_phone.clicked.connect(lambda _, phone=contact_phone: self.show_phone_dialog(phone))
-
-                h_layout.addWidget(btn_email)
-                h_layout.addWidget(btn_phone)
-
-                is_valid = row.get("validation_status", "").lower() == "validé"
 
                 btn_generate_pdf = QPushButton()
                 btn_generate_pdf.setIcon(QIcon(
@@ -224,18 +209,22 @@ class ProjectTable(NoFocusTableWidget):
                 btn_show_pdf.setEnabled(is_valid)
                 btn_show_pdf.clicked.connect(lambda _, pid=row['id']: self.show_pdf(pid))
 
+                h_layout.addWidget(btn_email)
+                h_layout.addWidget(btn_phone)
                 h_layout.addWidget(btn_generate_pdf)
                 h_layout.addWidget(btn_show_pdf)
                 h_layout.addStretch()
                 action_widget.setLayout(h_layout)
                 self.setCellWidget(i, len(self.COLUMNS), action_widget)
-                self.setRowHeight(i, 36)
-        self.resizeColumnsToContents()
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+                self.setRowHeight(i, self.DEFAULT_ROW_HEIGHT)
+        self._restore_default_sizes()
+
+    def _wrap_text(self, text, width):
+        import textwrap
+        return "\n".join(textwrap.wrap(text, width=width))
 
     def show_phone_dialog(self, phone):
         from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QApplication
-        from PyQt5.QtGui import QClipboard
         dialog = QDialog(self)
         dialog.setWindowTitle("Téléphone")
         layout = QVBoxLayout(dialog)
@@ -253,7 +242,6 @@ class ProjectTable(NoFocusTableWidget):
 
     def show_email_dialog(self, email):
         from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QApplication
-        from PyQt5.QtGui import QClipboard
         dialog = QDialog(self)
         dialog.setWindowTitle("Email")
         layout = QVBoxLayout(dialog)
@@ -300,6 +288,14 @@ class ProjectTable(NoFocusTableWidget):
             return None
         item = self.item(sel, 0)
         return item.data(Qt.UserRole) if item else None
+
+    def hideEvent(self, event):
+        self._restore_default_sizes()
+        super().hideEvent(event)
+
+    def showEvent(self, event):
+        self._restore_default_sizes()
+        super().showEvent(event)
 
 class ProjectForm(QDialog):
     WORK_TYPES = ["HVAC", "Thermal Mapping", "Instrumentation"]
@@ -470,30 +466,11 @@ class ProjectWidget(QWidget):
         self.user = user
         self.manager = ProjectManager(db)
         self.setStyleSheet("""
-            QWidget { background-color: #e0e0e0; }
             QPushButton {
                 background-color: #1c5ea3; color: #fff; border-radius: 8px;
                 padding: 8px 24px; font-weight: bold; font-size: 14px;
             }
             QPushButton:hover { background-color: #b8d5ed; color: #1c5ea3; }
-            QTableWidget {
-                background-color: #fff; 
-                alternate-background-color: #b8d5ed;
-                gridline-color: #1c5ea3; 
-                selection-background-color: #b8d5ed;
-                selection-color: #1c5ea3; 
-                border: 2px solid #1c5ea3; 
-                font-size: 15px;
-                border-radius: 8px;
-            }
-            QHeaderView::section {
-                background-color: #1c5ea3; color: #fff; font-weight: bold;
-                border: none; padding: 6px; qproperty-alignment: 'AlignCenter | AlignVCenter';
-            }
-            QTableWidget::item {
-                border-bottom: 1px solid #b8d5ed;
-                border-right: 1px solid #b8d5ed;
-            }
             QLineEdit, QDateEdit, QComboBox {
                 background: #fff; border: 1px solid #b8d5ed; border-radius: 4px;
                 padding: 4px 8px; font-size: 14px;

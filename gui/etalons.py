@@ -653,37 +653,38 @@ class StandardsTable(QTableWidget):
         self.verticalHeader().setVisible(False)
         self.horizontalHeader().setDefaultAlignment(Qt.AlignCenter | Qt.AlignVCenter)
         self.setWordWrap(True)
-        # Custom scroll bar style
-        self.setStyleSheet("""
-            QTableWidget {
+        # Custom scroll bar style (vertical and horizontal)
+        self.setStyleSheet(f"""
+            QTableWidget {{
+                gridline-color: {THEME_PRIMARY};
                 background-color: #fff;
-                gridline-color: #1c5ea3;
-                border: 2px solid #1c5ea3; 
+                border: 2px solid {THEME_PRIMARY};
                 font-size: 13px;
                 border-radius: 8px;
-                color: #000;
+                selection-color: #1c5ea3; 
                 font-weight: bold;
-            }
-            QHeaderView::section {
-                background-color: #1c5ea3; color: #fff; font-weight: bold;
+            }}
+            QHeaderView::section {{
+                background-color: {THEME_PRIMARY}; color: #fff; font-weight: bold;
                 border: none; padding: 6px; qproperty-alignment: 'AlignCenter | AlignVCenter';
-            }
-            QScrollBar:vertical, QScrollBar:horizontal {
+            }}
+            QScrollBar:vertical, QScrollBar:horizontal {{
                 background: #e0e0e0;
                 border-radius: 6px;
                 width: 12px;
+                height: 12px;
                 margin: 2px;
-            }
-            QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
+            }}
+            QScrollBar::handle:vertical, QScrollBar::handle:horizontal {{
                 background: #b8d5ed;
                 border-radius: 6px;
                 min-height: 30px;
                 min-width: 30px;
-            }
-            QScrollBar::add-line, QScrollBar::sub-line {
+            }}
+            QScrollBar::add-line, QScrollBar::sub-line {{
                 background: none;
                 border: none;
-            }
+            }}
         """)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
@@ -735,14 +736,11 @@ class StandardsTable(QTableWidget):
                 if key == "status":
                     value = r.get(key, "")
                     if value == "OK":
-                        item.setData(Qt.BackgroundRole, QColor("#4CAF50"))
-                        item.setData(Qt.TextColorRole, QColor("#ffffff"))
+                        item.setData(Qt.TextColorRole, QColor("#4CAF50"))
                     elif value == "Bientôt dû":
-                        item.setData(Qt.BackgroundRole, QColor("#FFC107"))
-                        item.setData(Qt.TextColorRole, QColor("#000000"))
+                        item.setData(Qt.TextColorRole, QColor("#F3B805"))
                     elif value == "Bloqué":
-                        item.setData(Qt.BackgroundRole, QColor("#F44336"))
-                        item.setData(Qt.TextColorRole, QColor("#ffffff"))
+                        item.setData(Qt.TextColorRole, QColor("#F44336"))
                 if col == 0:
                     item.setData(Qt.UserRole, r.get('id'))
                 self.setItem(i, col, item)
@@ -826,6 +824,9 @@ class StandardsTable(QTableWidget):
         # Restore default sizes when the widget is shown
         self._restore_default_sizes()
         super().showEvent(event)
+
+
+
 class EtalonsWidget(QWidget):
     def __init__(self, db, user, parent=None):
         super().__init__(parent)
@@ -838,20 +839,6 @@ class EtalonsWidget(QWidget):
                 padding: 8px 24px; font-weight: bold; font-size: 14px; border: none;
             }}
             QPushButton:hover {{ background-color: {THEME_ACCENT}; color: {THEME_PRIMARY}; }}
-            QTableWidget {{
-                background-color: #fff; 
-                gridline-color: {THEME_PRIMARY};
-                selection-color: {THEME_PRIMARY};
-                border: 2px solid {THEME_PRIMARY}; 
-                font-size: 13px;
-                font-weight: bold;
-                border-radius: 8px;
-            }}
-            QHeaderView::section {{
-                background-color: {THEME_PRIMARY}; color: #fff; font-weight: bold;
-                border: none; padding: 6px; qproperty-alignment: 'AlignCenter | AlignVCenter';
-            }}
-
             QLineEdit, QComboBox {{
                 background: #fff; border: 1px solid {THEME_ACCENT}; border-radius: 4px; padding: 4px 8px; font-size: 14px;
             }}
