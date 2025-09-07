@@ -628,6 +628,10 @@ class StandardsTable(QTableWidget):
         "owner_names", "location", "tags", "status"
     ]
 
+    # Default column widths (pixels) for a nice initial layout
+    DEFAULT_COLUMN_WIDTHS = [120, 120, 120, 110, 120, 80, 140, 120, 120, 80, 80]
+    DEFAULT_ROW_HEIGHT = 36
+
     def __init__(self, parent=None, user=None):
         super().__init__(0, len(self.HEADERS), parent)
         self.user = user
@@ -635,17 +639,21 @@ class StandardsTable(QTableWidget):
         if self.user and self.user.get("role") in ("Technicien", "Technicien responsable"):
             self.show_actions = False
         headers = self.HEADERS if self.show_actions else self.HEADERS[:-1]
+        headers_wrapped = [h.replace(" ", "\n") if len(h) > 12 else h for h in headers]
         self.setColumnCount(len(headers))
-        self.setHorizontalHeaderLabels(headers)
+        self.setHorizontalHeaderLabels(headers_wrapped)
         self.setSelectionBehavior(self.SelectRows)
         self.setSelectionMode(self.SingleSelection)
         self.setEditTriggers(self.NoEditTriggers)
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+        self.horizontalHeader().setStretchLastSection(True)
+        self.verticalHeader().setSectionResizeMode(QHeaderView.Interactive)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setMinimumHeight(200)
         self.verticalHeader().setVisible(False)
         self.horizontalHeader().setDefaultAlignment(Qt.AlignCenter | Qt.AlignVCenter)
+        self.setWordWrap(True)
+        # Custom scroll bar style
         self.setStyleSheet("""
             QTableWidget {
                 background-color: #fff;
@@ -660,8 +668,35 @@ class StandardsTable(QTableWidget):
                 background-color: #1c5ea3; color: #fff; font-weight: bold;
                 border: none; padding: 6px; qproperty-alignment: 'AlignCenter | AlignVCenter';
             }
-
+            QScrollBar:vertical, QScrollBar:horizontal {
+                background: #e0e0e0;
+                border-radius: 6px;
+                width: 12px;
+                margin: 2px;
+            }
+            QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
+                background: #b8d5ed;
+                border-radius: 6px;
+                min-height: 30px;
+                min-width: 30px;
+            }
+            QScrollBar::add-line, QScrollBar::sub-line {
+                background: none;
+                border: none;
+            }
         """)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setShowGrid(True)
+        self.setAlternatingRowColors(True)
+        self._restore_default_sizes()
+
+    def _restore_default_sizes(self):
+        # Set default column widths and row heights
+        for col, width in enumerate(self.DEFAULT_COLUMN_WIDTHS[:self.columnCount()]):
+            self.setColumnWidth(col, width)
+        for row in range(self.rowCount()):
+            self.setRowHeight(row, self.DEFAULT_ROW_HEIGHT)
 
     def populate(self, rows):
         self.setRowCount(len(rows))
@@ -669,11 +704,9 @@ class StandardsTable(QTableWidget):
         for i, r in enumerate(rows):
             r = dict(r)
             days = days_until(r.get("next_cal_date"))
-            # --- Get all responsible names ---
             owner_ids = r.get("owner_id")
             owner_names = ""
             if owner_ids:
-                # Accept both int and CSV string
                 if isinstance(owner_ids, int):
                     ids = [owner_ids]
                 elif isinstance(owner_ids, str):
@@ -694,8 +727,11 @@ class StandardsTable(QTableWidget):
                     value = "" if days is None else str(days)
                 else:
                     value = r.get(key, "")
+                if isinstance(value, str) and len(value) > 30:
+                    value = self._wrap_text(value, 30)
                 item = QTableWidgetItem(str(value))
                 item.setTextAlignment(Qt.AlignCenter)
+                item.setFlags(item.flags() | Qt.TextWordWrap)
                 if key == "status":
                     value = r.get(key, "")
                     if value == "OK":
@@ -707,20 +743,15 @@ class StandardsTable(QTableWidget):
                     elif value == "Bloqué":
                         item.setData(Qt.BackgroundRole, QColor("#F44336"))
                         item.setData(Qt.TextColorRole, QColor("#ffffff"))
-
-                # Store id in first column for selection
                 if col == 0:
                     item.setData(Qt.UserRole, r.get('id'))
                 self.setItem(i, col, item)
-            # Actions column (last column)
             if self.show_actions:
                 action_widget = QWidget()
                 h_layout = QHBoxLayout(action_widget)
                 h_layout.setContentsMargins(0, 0, 0, 0)
                 h_layout.setSpacing(5)
                 h_layout.addStretch()
-
-                # Bloquer
                 btn_block = QPushButton()
                 btn_block.setIcon(QIcon(os.path.join(icon_dir, "bloquer.png")))
                 btn_block.setToolTip("Bloquer l'étalon")
@@ -736,8 +767,6 @@ class StandardsTable(QTableWidget):
                 """)
                 btn_block.setEnabled(int(r.get("blocked", 0)) == 0)
                 btn_block.clicked.connect(lambda _, sid=r["id"]: self.parent().on_block_row(sid))
-
-                # Débloquer
                 btn_unblock = QPushButton()
                 btn_unblock.setIcon(QIcon(os.path.join(icon_dir, "debloquer.png")))
                 btn_unblock.setToolTip("Débloquer l'étalon")
@@ -753,8 +782,6 @@ class StandardsTable(QTableWidget):
                 """)
                 btn_unblock.setEnabled(int(r.get("blocked", 0)) == 1)
                 btn_unblock.clicked.connect(lambda _, sid=r["id"]: self.parent().on_unblock_row(sid))
-
-                # Ouvrir certificat
                 btn_cert = QPushButton()
                 btn_cert.setIcon(QIcon(os.path.join(icon_dir, "certificat.png")))
                 btn_cert.setToolTip("Ouvrir certificat PDF")
@@ -777,9 +804,11 @@ class StandardsTable(QTableWidget):
                 h_layout.addStretch()
                 action_widget.setLayout(h_layout)
                 self.setCellWidget(i, len(self.COLUMNS), action_widget)
-                self.setRowHeight(i, 36)
-        self.resizeColumnsToContents()
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+                self.setRowHeight(i, self.DEFAULT_ROW_HEIGHT)
+        self._restore_default_sizes()
+
+    def _wrap_text(self, text, width):
+        return "\n".join(textwrap.wrap(text, width=width))
 
     def get_selected_standard_id(self):
         sel = self.currentRow()
@@ -788,6 +817,15 @@ class StandardsTable(QTableWidget):
         item = self.item(sel, 0)
         return item.data(Qt.UserRole) if item else None
 
+    def hideEvent(self, event):
+        # Restore default sizes when the widget is hidden (e.g., page change or close)
+        self._restore_default_sizes()
+        super().hideEvent(event)
+
+    def showEvent(self, event):
+        # Restore default sizes when the widget is shown
+        self._restore_default_sizes()
+        super().showEvent(event)
 class EtalonsWidget(QWidget):
     def __init__(self, db, user, parent=None):
         super().__init__(parent)
@@ -1077,5 +1115,6 @@ class EtalonsWidget(QWidget):
 # ----------- Petit helper (éviter import global QInputDialog) ----------
 from PyQt5.QtWidgets import QInputDialog
 from models.standardmanager import StandardManager
+import textwrap
 def QInputDialog_getText(parent, title, label, text=""):
     return QInputDialog.getText(parent, title, label, QLineEdit.Normal, text)

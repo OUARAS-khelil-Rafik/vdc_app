@@ -79,12 +79,12 @@ class DashboardWindow(QMainWindow):
 
     def _init_ui(self):
         self.setWindowTitle("VDC Engineering – Tableau de bord")
-        self.setMinimumSize(1200, 600)
+        self.setMinimumSize(1300, 700)
         self.setStyleSheet("""
             QMainWindow, QWidget { background-color: #e0e0e0; }
             QLabel#welcomeLabel {
                 color: #1c5ea3; font-size: 22px; font-weight: bold;
-                border-radius: 10px; padding: 12px; margin-bottom: 10px;
+                border-radius: 5px;
             }
             QToolButton {
                 background: transparent; border: none; color: #1c5ea3;
@@ -123,7 +123,7 @@ class DashboardWindow(QMainWindow):
         self.setCentralWidget(self.central)
 
         # Message de bienvenue
-        self.welcome = QLabel(f"Bonjour {self.user.get('full_name','')} ({self.user.get('role','')})")
+        self.welcome = QLabel(f"Bienvenue {self.user.get('full_name','')} ({self.user.get('role','')})")
         self.welcome.setObjectName("welcomeLabel")
         self.welcome.setAlignment(Qt.AlignCenter)
         self.central_layout.addWidget(self.welcome)

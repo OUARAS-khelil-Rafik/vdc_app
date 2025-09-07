@@ -184,10 +184,9 @@ class ACPHPage(QWidget):
         self.out_Q = QLabel("—"); self.out_ACPH = QLabel("—"); self.out_window = QLabel("—")
         self.status = QLabel(); set_status_pill(self.status, None)
 
-        # ---------- Boutons (on garde “Calculer”, mais tout est live)
-        btn_calc = QPushButton("Calculer"); btn_calc.clicked.connect(self.recalc)
+        # ---------- (Tout est live)
         btn_save = QPushButton("Enregistrer"); btn_save.clicked.connect(self.on_save)
-        btn_th = QPushButton("Seuils…"); btn_th.clicked.connect(self.edit_thresholds)
+        btn_th = QPushButton("Seuils"); btn_th.clicked.connect(self.edit_thresholds)
 
         # ---------- Layout principal
         root = QVBoxLayout(self)
@@ -210,7 +209,7 @@ class ACPHPage(QWidget):
         outs.addRow("Conformité", self.status)
         root.addLayout(outs)
 
-        btns = QHBoxLayout(); btns.addWidget(btn_calc); btns.addWidget(btn_save); btns.addStretch(1); btns.addWidget(btn_th)
+        btns = QHBoxLayout(); btns.addWidget(btn_save); btns.addStretch(1); btns.addWidget(btn_th)
         root.addLayout(btns)
 
         # Init
@@ -2628,50 +2627,7 @@ class TempRHPage(QWidget):
         QMessageBox.information(self, "OK", "Résultat enregistré.")
 
 # --------------------------- Main Window ------------------------------
-
-from PyQt5.QtWidgets import QDialog
-
-class ProjectDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Nouveau projet")
-        self.setModal(True)
-        form = QFormLayout(self)
-        self.company = QLineEdit(); self.name = QLineEdit()
-        self.location = QLineEdit(); self.tag = QLineEdit()
-        self.work_type = QComboBox(); self.work_type.addItems(["HVAC", "Thermal Mapping", "Instrumentation"])
-        self.test_date = QLineEdit(datetime.now().strftime("%Y-%m-%d"))
-        self.contact = QLineEdit(); self.responsables = QLineEdit()
-        self.notes = QPlainTextEdit()
-        form.addRow("Entreprise", self.company)
-        form.addRow("Nom projet", self.name)
-        form.addRow("Localisation", self.location)
-        form.addRow("Tag", self.tag)
-        form.addRow("Type de travail", self.work_type)
-        form.addRow("Date de test (YYYY-MM-DD)", self.test_date)
-        form.addRow("Contact", self.contact)
-        form.addRow("Responsables (séparés par ,)", self.responsables)
-        form.addRow("Notes", self.notes)
-        btns = QHBoxLayout()
-        b_ok = QPushButton("Créer"); b_ok.clicked.connect(self.accept)
-        b_cancel = QPushButton("Annuler"); b_cancel.clicked.connect(self.reject)
-        btns.addWidget(b_ok); btns.addWidget(b_cancel)
-        form.addRow(btns)
-
-    def data(self) -> Dict[str, Any]:
-        return {
-            "company": self.company.text().strip(),
-            "name": self.name.text().strip(),
-            "location": self.location.text().strip(),
-            "tag": self.tag.text().strip(),
-            "work_type": self.work_type.currentText(),
-            "test_date": self.test_date.text().strip(),
-            "contact": self.contact.text().strip(),
-            "responsables": self.responsables.text().strip(),
-            "notes": self.notes.toPlainText().strip(),
-        }
-
-
+from PyQt5.QtWidgets import QScrollArea
 class TestWidget(QWidget):
     def __init__(self, db, user):
         super().__init__()
@@ -2680,11 +2636,7 @@ class TestWidget(QWidget):
 
         # Top bar: project selector
         top = QWidget(); top_l = QHBoxLayout(top)
-        self.cb_projects = QComboBox()
-        b_new = QPushButton("Nouveau projet…"); b_new.clicked.connect(self.on_new_project)
-        b_refresh = QPushButton("↻"); b_refresh.clicked.connect(self.reload_projects)
-        top_l.addWidget(QLabel("Projet:")); top_l.addWidget(self.cb_projects, 1)
-        top_l.addWidget(b_new); top_l.addWidget(b_refresh)
+        self.cb_projects = QComboBox(); top_l.addWidget(QLabel("Projet:")); top_l.addWidget(self.cb_projects, 1)
 
         # Left tree
         self.tree = QTreeWidget(); self.tree.setHeaderHidden(True)
@@ -2706,7 +2658,7 @@ class TestWidget(QWidget):
         self.tree.expandAll()
         self.tree.currentItemChanged.connect(self.on_tree_change)
 
-        # Stacked pages
+        # Stacked pages with scroll areas for each page
         def get_pid():
             data = self.cb_projects.currentData()
             return int(data) if data is not None else None
@@ -2721,10 +2673,43 @@ class TestWidget(QWidget):
             "Recovery_Time": RecoveryPage(self.db, get_pid),
             "Temp_RH": TempRHPage(self.db, get_pid),
         }
+
+        # Wrap each page in a QScrollArea for better visual and scrolling
+        self.scroll_areas: Dict[str, QScrollArea] = {}
+        for k, page in self.pages.items():
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setWidget(page)
+            # Style for better visual (light background, no border, rounded corners)
+            scroll.setStyleSheet("""
+                QScrollArea {
+                    background: transparent;
+                    border: none;
+                }
+                QScrollBar:vertical, QScrollBar:horizontal {
+                    background: #e0e0e0;
+                    border-radius: 6px;
+                    width: 12px;
+                    margin: 2px;
+                }
+                QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
+                    background: #b8d5ed;
+                    border-radius: 6px;
+                    min-height: 30px;
+                    min-width: 30px;
+                }
+                QScrollBar::add-line, QScrollBar::sub-line {
+                    background: none;
+                    border: none;
+                }
+            """)
+            self.scroll_areas[k] = scroll
+
         self.stack = QStackedWidget()
         self.key_to_index: Dict[str, int] = {}
         for i, (k, _) in enumerate(tests):
-            self.stack.addWidget(self.pages[k]); self.key_to_index[k] = i
+            self.stack.addWidget(self.scroll_areas[k])
+            self.key_to_index[k] = i
 
         # Central layout
         central_l = QVBoxLayout(self)
@@ -2745,17 +2730,6 @@ class TestWidget(QWidget):
         for r in rows:
             label = f"{r['id']} • {r.get('company_name', '') or ''} {r.get('room_tag', '') or ''} [{r.get('location', '') or ''}]".strip()
             self.cb_projects.addItem(label, r["id"])
-
-    def on_new_project(self):
-        dlg = ProjectDialog()
-        if dlg.exec_() == QDialog.Accepted:
-            pid = self.db.add_project(dlg.data())
-            self.reload_projects()
-            # Select the newly created project
-            for i in range(self.cb_projects.count()):
-                if self.cb_projects.itemData(i) == pid:
-                    self.cb_projects.setCurrentIndex(i); break
-            QMessageBox.information(self, "Projet", f"Projet #{pid} créé.")
 
     # ---- Navigation ----
     def on_tree_change(self, cur: QTreeWidgetItem, prev: QTreeWidgetItem):
